@@ -508,13 +508,15 @@
 
                async initializeFirebase() {
                    try {
-                       const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-                        if (Object.keys(firebaseConfig).length === 0) {
-                           console.error("Firebase config is missing or empty.");
-                           alert("Firebaseの設定が不十分なため、アプリを初期化できません。");
-                           this.loading = false;
-                           return;
-                       }
+                    const firebaseConfig = {
+                        apiKey: "AIzaSyB-UKi0ZjOqu8RwYrP-YpxqSYQhZKKbaXU",
+                          authDomain: "tabletennis-e2f4f.firebaseapp.com",
+                            projectId: "tabletennis-e2f4f",
+                            storageBucket: "tabletennis-e2f4f.firebasestorage.app",
+                        messagingSenderId: "920016325682",
+                        appId: "1:920016325682:web:8a76492a35a71bad36402b",
+                        measurementId: "G-GZ2693V6GT"
+                        };
 
 
                        const app = initializeApp(firebaseConfig);
