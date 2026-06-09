@@ -1,0 +1,851 @@
+﻿<!DOCTYPE html>
+<html lang="ja">
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>啓林館卓球部 公式HP</title>
+   <script src="https://cdn.tailwindcss.com"></script>
+   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+   <style>
+       body { font-family: 'Inter', sans-serif; }
+       .tab-active { background-color: #3b82f6; color: white; }
+       .modal { transition: opacity 0.3s ease; }
+       [v-cloak] { display: none; }
+   </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+
+   <div id="app" v-cloak class="max-w-lg mx-auto bg-white min-h-screen shadow-lg">
+
+
+       <!-- 全画面ローディング -->
+       <div v-if="isRecalculating" class="fixed inset-0 bg-white bg-opacity-80 z-50 flex flex-col items-center justify-center">
+           <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-500"></div>
+           <p class="mt-4 text-lg font-semibold text-gray-700">全データを再計算中です...</p>
+       </div>
+
+
+       <!-- ヘッダー -->
+       <header class="bg-blue-600 text-white p-4 text-center sticky top-0 z-10 shadow-md">
+           <h1 class="text-2xl font-bold">啓林館卓球部</h1>
+       </header>
+
+
+       <!-- タブナビゲーション -->
+       <nav class="flex justify-around bg-gray-200 sticky top-[72px] z-10">
+           <button @click="activeTab = 'ranking'" :class="{'tab-active': activeTab === 'ranking'}" class="flex-1 py-3 px-2 font-semibold text-sm sm:text-base text-gray-700 hover:bg-blue-500 hover:text-white transition">ランキング</button>
+           <button @click="activeTab = 'match'" :class="{'tab-active': activeTab === 'match'}" class="flex-1 py-3 px-2 font-semibold text-sm sm:text-base text-gray-700 hover:bg-blue-500 hover:text-white transition">試合入力</button>
+           <button @click="activeTab = 'history'" :class="{'tab-active': activeTab === 'history'}" class="flex-1 py-3 px-2 font-semibold text-sm sm:text-base text-gray-700 hover:bg-blue-500 hover:text-white transition">対戦履歴</button>
+           <button @click="activeTab = 'info'" :class="{'tab-active': activeTab === 'info'}" class="flex-1 py-3 px-2 font-semibold text-sm sm:text-base text-gray-700 hover:bg-blue-500 hover:text-white transition">情報</button>
+       </nav>
+
+
+       <main class="p-4">
+           <!-- ローディング表示 -->
+           <div v-if="loading && !isRecalculating" class="text-center py-10">
+               <p>データを読み込んでいます...</p>
+           </div>
+
+
+           <!-- ランキング & 部員一覧タブ -->
+           <section v-show="activeTab === 'ranking'" v-if="!loading">
+               <h2 class="text-xl font-bold mb-4 border-b-2 border-blue-500 pb-2">部内ランキング</h2>
+               <div v-if="ranking.length === 0" class="text-center text-gray-500 py-4">部員を登録してください</div>
+               <ul class="space-y-3">
+                   <li v-for="(member, index) in rankedMembers" :key="member.id" @click="showMemberDetails(member)" class="bg-white p-3 rounded-lg shadow-sm border border-gray-200 cursor-pointer hover:bg-gray-50">
+                       <div class="flex items-center space-x-4">
+                           <span class="text-lg font-bold text-gray-500 w-6 text-center">{{ index + 1 }}</span>
+                           <div class="flex-1">
+                               <p class="font-semibold text-lg">{{ member.name }}</p>
+                               <p class="text-sm text-blue-600 font-medium">Rate: {{ Math.round(member.currentRating) }} (Max: {{ Math.round(member.maxRating) }})</p>
+                               <p class="text-xs font-bold" :style="{color: getTitleInfo(member.currentRating).color}">{{ getTitleInfo(member.currentRating).name }}</p>
+                           </div>
+                            <div class="text-right">
+                               <p v-if="getChallengeRight(member.id)" class="text-xs font-bold text-red-500 animate-pulse">
+                                   {{ getChallengeRight(member.id).targetName }}への<br>挑戦権発生！
+                               </p>
+                           </div>
+                       </div>
+                   </li>
+               </ul>
+           </section>
+
+
+           <!-- 試合入力タブ -->
+           <section v-show="activeTab === 'match'" v-if="!loading">
+               <!-- 通常試合 -->
+               <div class="bg-white p-4 rounded-lg shadow mb-6">
+                   <h2 class="text-xl font-bold mb-4 border-b-2 border-green-500 pb-2">通常試合 結果入力</h2>
+                   <div v-if="members.length < 2" class="text-gray-500">部員が2名以上必要です</div>
+                   <form v-else @submit.prevent="addMatch(false)">
+                       <div class="grid grid-cols-2 gap-4 mb-4">
+                           <div>
+                               <label for="player1" class="block mb-1 font-semibold">選手1</label>
+                               <select id="player1" v-model="match.player1Id" class="w-full p-2 border rounded-md" required>
+                                   <option disabled value="">選択してください</option>
+                                   <option v-for="member in availablePlayers2" :value="member.id">{{ member.name }}</option>
+                               </select>
+                           </div>
+                           <div>
+                               <label for="player2" class="block mb-1 font-semibold">選手2</label>
+                               <select id="player2" v-model="match.player2Id" class="w-full p-2 border rounded-md" required>
+                                   <option disabled value="">選択してください</option>
+                                   <option v-for="member in availablePlayers1" :value="member.id">{{ member.name }}</option>
+                               </select>
+                           </div>
+                       </div>
+                       <div class="mb-4">
+                           <label class="block mb-1 font-semibold">勝者</label>
+                           <select v-model="match.winnerId" class="w-full p-2 border rounded-md" required>
+                               <option disabled value="">選択してください</option>
+                               <option v-if="match.player1Id" :value="match.player1Id">{{ getMemberName(match.player1Id) }}</option>
+                               <option v-if="match.player2Id" :value="match.player2Id">{{ getMemberName(match.player2Id) }}</option>
+                           </select>
+                       </div>
+                       <button type="submit" class="w-full bg-green-500 text-white py-2 rounded-lg font-bold hover:bg-green-600 transition">試合結果を登録</button>
+                   </form>
+               </div>
+              
+                <!-- 入替戦 -->
+               <div class="bg-white p-4 rounded-lg shadow">
+                   <h2 class="text-xl font-bold mb-4 border-b-2 border-red-500 pb-2">入替戦 結果入力</h2>
+                   <div v-if="availableChallenges.length === 0" class="text-gray-500">現在、挑戦可能な入替戦はありません</div>
+                   <form v-else @submit.prevent="addRankingMatch">
+                       <div class="mb-4">
+                           <label for="challenge" class="block mb-1 font-semibold">対戦カード</label>
+                           <select id="challenge" v-model="rankingMatch.challengeId" class="w-full p-2 border rounded-md" required>
+                               <option disabled value="">選択してください</option>
+                               <option v-for="challenge in availableChallenges" :value="challenge.id">{{ challenge.challengerName }} vs {{ challenge.targetName }}</option>
+                           </select>
+                       </div>
+                       <div class="mb-4">
+                           <label class="block mb-1 font-semibold">勝者</label>
+                           <select v-model="rankingMatch.winnerId" class="w-full p-2 border rounded-md" required>
+                               <option disabled value="">選択してください</option>
+                               <option v-if="selectedChallenge" :value="selectedChallenge.challengerId">{{ selectedChallenge.challengerName }}</option>
+                               <option v-if="selectedChallenge" :value="selectedChallenge.targetId">{{ selectedChallenge.targetName }}</option>
+                           </select>
+                       </div>
+                       <button type="submit" class="w-full bg-red-500 text-white py-2 rounded-lg font-bold hover:bg-red-600 transition">入替戦結果を登録</button>
+                   </form>
+               </div>
+           </section>
+
+
+           <!-- 対戦履歴タブ -->
+           <section v-show="activeTab === 'history'" v-if="!loading">
+               <h2 class="text-xl font-bold mb-4 border-b-2 border-yellow-500 pb-2">全対戦履歴</h2>
+               <div v-if="matches.length === 0" class="text-center text-gray-500 py-4">まだ対戦記録がありません</div>
+               <ul class="space-y-2">
+                   <li v-for="match in matches" :key="match.id" class="bg-white p-3 rounded-lg shadow-sm border border-gray-200" :class="{'bg-red-50 border-red-200': match.isRankingMatch}">
+                       <div class="flex justify-between items-center">
+                           <div class="flex-1">
+                               <span v-if="match.isRankingMatch" class="text-xs font-bold text-red-500 bg-red-100 px-2 py-1 rounded-full">入替戦</span>
+                               <p class="font-semibold">
+                                   <span class="text-green-600">👑 {{ getMemberName(match.winnerId) }}</span> vs {{ getMemberName(match.loserId) }}
+                               </p>
+                               <p class="text-xs text-gray-500">{{ new Date(match.date.seconds * 1000).toLocaleString('ja-JP') }}</p>
+                           </div>
+                           <div class="text-right text-xs mr-4">
+                               <p class="font-mono text-green-600">+{{ match.ratingChangeWinner.toFixed(1) }}</p>
+                               <p class="font-mono text-red-600">{{ match.ratingChangeLoser.toFixed(1) }}</p>
+                           </div>
+                           <div class="relative">
+                               <button @click="toggleHistoryMenu(match.id)" class="p-2 rounded-full hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-400">
+                                   <svg class="w-5 h-5 text-gray-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                       <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z" />
+                                   </svg>
+                               </button>
+                               <!-- Dropdown menu -->
+                               <div v-if="historyMenuOpenForMatchId === match.id" @click.stop class="absolute right-0 mt-1 w-28 bg-white rounded-md shadow-xl z-20 border">
+                                   <a href="#" @click.prevent="openEditModal(match)" class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">修正する</a>
+                                   <a href="#" @click.prevent="confirmDeleteMatch(match)" class="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100">削除する</a>
+                               </div>
+                           </div>
+                       </div>
+                   </li>
+               </ul>
+           </section>
+
+
+           <!-- 情報タブ -->
+           <section v-show="activeTab === 'info'" v-if="!loading">
+               <!-- 新規部員追加 -->
+               <div class="bg-white p-4 rounded-lg shadow mb-6">
+                   <h2 class="text-xl font-bold mb-4 border-b-2 border-indigo-500 pb-2">新規部員追加</h2>
+                   <form @submit.prevent="addMember">
+                       <input v-model="newMemberName" type="text" placeholder="新しい部員の名前" class="w-full p-2 border rounded-md mb-2" required>
+                       <button type="submit" class="w-full bg-indigo-500 text-white py-2 rounded-lg font-bold hover:bg-indigo-600 transition">部員を追加</button>
+                   </form>
+               </div>
+
+
+               <!-- 称号一覧 -->
+               <div class="bg-white p-4 rounded-lg shadow">
+                   <h2 class="text-xl font-bold mb-4 border-b-2 border-purple-500 pb-2">称号一覧</h2>
+                   <ul class="space-y-1 text-sm">
+                       <li v-for="title in titles" class="flex justify-between p-1 rounded" :style="{backgroundColor: title.color+'20'}">
+                           <span class="font-bold" :style="{color: title.color}">{{ title.name }}</span>
+                           <span class="text-gray-600">{{ title.condition }}</span>
+                       </li>
+                   </ul>
+               </div>
+           </section>
+       </main>
+
+
+       <!-- 部員詳細モーダル -->
+       <div v-if="selectedMember" @click.self="selectedMember = null" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 modal z-20">
+           <div class="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+               <div class="p-4 border-b sticky top-0 bg-white">
+                   <h3 class="text-2xl font-bold text-center">{{ selectedMember.name }}</h3>
+                   <p class="text-center font-bold text-lg" :style="{color: getTitleInfo(selectedMember.currentRating).color}">{{ getTitleInfo(selectedMember.currentRating).name }}</p>
+               </div>
+               <div class="p-4 space-y-4">
+                   <!-- Stats -->
+                   <div>
+                       <h4 class="font-bold text-lg mb-2">ステータス</h4>
+                       <div class="grid grid-cols-2 gap-2 text-center">
+                           <div class="bg-gray-100 p-2 rounded">
+                               <p class="text-sm text-gray-500">現在レート</p>
+                               <p class="text-2xl font-bold text-blue-600">{{ Math.round(selectedMember.currentRating) }}</p>
+                           </div>
+                           <div class="bg-gray-100 p-2 rounded">
+                               <p class="text-sm text-gray-500">最高レート</p>
+                               <p class="text-2xl font-bold text-purple-600">{{ Math.round(selectedMember.maxRating) }}</p>
+                           </div>
+                           <div class="bg-gray-100 p-2 rounded">
+                               <p class="text-sm text-gray-500">勝敗</p>
+                               <p class="text-lg font-semibold"><span class="text-green-600">{{ selectedMember.wins }}</span>勝 <span class="text-red-600">{{ selectedMember.losses }}</span>敗</p>
+                           </div>
+                           <div class="bg-gray-100 p-2 rounded">
+                               <p class="text-sm text-gray-500">勝率</p>
+                               <p class="text-lg font-semibold">{{ selectedMember.totalGames > 0 ? ((selectedMember.wins / selectedMember.totalGames) * 100).toFixed(1) : '0.0' }}%</p>
+                           </div>
+                            <div class="bg-gray-100 p-2 rounded">
+                               <p class="text-sm text-gray-500">連勝</p>
+                               <p class="text-lg font-semibold">{{ selectedMember.winStreak }}連勝中</p>
+                           </div>
+                            <div class="bg-gray-100 p-2 rounded">
+                               <p class="text-sm text-gray-500">最大連勝</p>
+                               <p class="text-lg font-semibold">{{ selectedMember.maxWinStreak }}連勝</p>
+                           </div>
+                       </div>
+                   </div>
+                  
+                   <!-- 実績 -->
+                   <div>
+                       <h4 class="font-bold text-lg mb-2">実績</h4>
+                       <div v-if="selectedMember.achievements && selectedMember.achievements.length > 0" class="flex flex-wrap gap-2">
+                            <span v-for="achId in selectedMember.achievements" :key="achId" class="bg-yellow-100 text-yellow-800 text-xs font-semibold px-2.5 py-1 rounded-full">
+                               {{ getAchievementText(achId) }}
+                           </span>
+                       </div>
+                       <p v-else class="text-gray-500 text-sm">実績はまだありません</p>
+                   </div>
+
+
+                   <!-- 対戦履歴 -->
+                   <div>
+                       <h4 class="font-bold text-lg mb-2">最近の対戦履歴</h4>
+                       <ul class="space-y-2">
+                            <li v-for="match in getMemberMatches(selectedMember.id)" :key="match.id" class="bg-gray-50 p-2 rounded-md text-sm">
+                               <div class="flex justify-between items-center">
+                                   <p>vs {{ getMemberName(match.winnerId === selectedMember.id ? match.loserId : match.winnerId) }}</p>
+                                   <p :class="{'text-green-600 font-bold': match.winnerId === selectedMember.id, 'text-red-600 font-bold': match.loserId === selectedMember.id}">
+                                       {{ match.winnerId === selectedMember.id ? '勝利' : '敗北' }}
+                                   </p>
+                                   <p class="text-xs text-gray-500">{{ new Date(match.date.seconds * 1000).toLocaleDateString() }}</p>
+                               </div>
+                            </li>
+                       </ul>
+                   </div>
+               </div>
+               <div class="p-4 border-t sticky bottom-0 bg-white">
+                   <button @click="selectedMember = null" class="w-full bg-gray-500 text-white py-2 rounded-lg font-bold hover:bg-gray-600 transition">閉じる</button>
+               </div>
+           </div>
+       </div>
+
+
+       <!-- 試合修正モーダル -->
+       <div v-if="matchToEdit" @click.self="cancelEdit" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 modal z-30">
+           <div class="bg-white rounded-lg shadow-xl w-full max-w-sm">
+               <h3 class="text-lg font-bold p-4 border-b">試合結果を修正</h3>
+               <div class="p-4">
+                   <p class="font-semibold mb-2">{{ getMemberName(matchToEdit.player1Id) }} vs {{ getMemberName(matchToEdit.player2Id) }}</p>
+                   <label class="block mb-1 font-semibold">勝者</label>
+                   <select v-model="matchToEdit.winnerId" class="w-full p-2 border rounded-md">
+                       <option :value="matchToEdit.player1Id">{{ getMemberName(matchToEdit.player1Id) }}</option>
+                       <option :value="matchToEdit.player2Id">{{ getMemberName(matchToEdit.player2Id) }}</option>
+                   </select>
+               </div>
+               <div class="p-4 bg-gray-50 flex justify-end space-x-2">
+                   <button @click="cancelEdit" class="px-4 py-2 bg-gray-200 rounded font-semibold hover:bg-gray-300">キャンセル</button>
+                   <button @click="saveMatchEdit" class="px-4 py-2 bg-blue-500 text-white rounded font-semibold hover:bg-blue-600">保存</button>
+               </div>
+           </div>
+       </div>
+
+
+       <!-- 削除確認モーダル -->
+       <div v-if="matchToDelete" @click.self="cancelDelete" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 modal z-30">
+           <div class="bg-white rounded-lg shadow-xl w-full max-w-sm">
+               <h3 class="text-lg font-bold p-4 border-b">削除の確認</h3>
+               <p class="p-4">この試合結果を本当に削除しますか？<br>関連する全データが再計算されます。</p>
+               <div class="p-4 bg-gray-50 flex justify-end space-x-2">
+                   <button @click="cancelDelete" class="px-4 py-2 bg-gray-200 rounded font-semibold hover:bg-gray-300">いいえ</button>
+                   <button @click="deleteConfirmedMatch" class="px-4 py-2 bg-red-500 text-white rounded font-semibold hover:bg-red-600">はい、削除します</button>
+               </div>
+           </div>
+       </div>
+
+
+   </div>
+
+
+   <!-- Vue.js and Firebase SDKs -->
+   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+   <script type="module">
+       import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+       import {
+           getFirestore, collection, onSnapshot, doc,
+           addDoc, writeBatch, query, orderBy, serverTimestamp, setDoc, getDoc, deleteDoc, updateDoc
+       } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+       import {
+           getAuth, onAuthStateChanged, signInWithCustomToken, signInAnonymously
+       } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+      
+       // --- 定数データ ---
+       const K_FACTOR = 32;
+       const INITIAL_RATING = 1500;
+       const TITLES = [
+           { name: '魔王', min: 2000, color: '#ff00ff', condition: 'レート2000以上' },
+           { name: '卓神', min: 1800, color: '#ff4500', condition: 'レート1800-1999' },
+           { name: '卓聖', min: 1750, color: '#ff8c00', condition: 'レート1750-1799' },
+           { name: '卓帝', min: 1700, color: '#ffd700', condition: 'レート1700-1749' },
+           { name: '卓王', min: 1680, color: '#adff2f', condition: 'レート1680-1699' },
+           { name: '卓豪', min: 1660, color: '#00ff00', condition: 'レート1660-1679' },
+           { name: '卓傑', min: 1640, color: '#00fa9a', condition: 'レート1640-1659' },
+           { name: '超人', min: 1620, color: '#00ced1', condition: 'レート1620-1639' },
+           { name: '鉄人', min: 1600, color: '#1e90ff', condition: 'レート1600-1619' },
+           { name: '達人', min: 1580, color: '#4169e1', condition: 'レート1580-1599' },
+           { name: '名人', min: 1560, color: '#0000cd', condition: 'レート1560-1579' },
+           { name: '玄人', min: 1550, color: '#8a2be2', condition: 'レート1550-1559' },
+           { name: '強者', min: 1540, color: '#9400d3', condition: 'レート1540-1549' },
+           { name: '四段', min: 1530, color: '#9932cc', condition: 'レート1530-1539' },
+           { name: '三段', min: 1520, color: '#ba55d3', condition: 'レート1520-1529' },
+           { name: '二段', min: 1510, color: '#c71585', condition: 'レート1510-1519' },
+           { name: '初段', min: 1500.001, color: '#db7093', condition: 'レート1501-1509' },
+           { name: '初期値', min: 1500, max: 1500, color: '#696969', condition: 'レート1500' },
+           { name: '１級', min: 1450, color: '#708090', condition: 'レート1450-1499' },
+           { name: '２級', min: 1400, color: '#778899', condition: 'レート1400-1449' },
+           { name: '３級', min: 1350, color: '#a9a9a9', condition: 'レート1350-1399' },
+           { name: '４級', min: 1300, color: '#c0c0c0', condition: 'レート1300-1349' },
+           { name: '５級', min: 1250, color: '#d3d3d3', condition: 'レート1250-1299' },
+           { name: '脱初心者', min: 1200, color: '#dcdcdc', condition: 'レート1200-1249' },
+           { name: '修行中', min: 0, color: '#f5f5f5', condition: 'レート1199以下' },
+       ];
+      
+       const ACHIEVEMENTS = {
+           'wins_50': '通算50勝', 'wins_100': '通算100勝', 'wins_200': '通算200勝', 'wins_300': '通算300勝', 'wins_400': '通算400勝', 'wins_500': '通算500勝', 'wins_600': '通算600勝', 'wins_700': '通算700勝', 'wins_777': '通算777勝', 'wins_800': '通算800勝', 'wins_900': '通算900勝', 'wins_1000': '通算1000勝', 'wins_1500': '通算1500勝', 'wins_2000': '通算2000勝', 'wins_2500': '通算2500勝', 'wins_3000': '通算3000勝', 'wins_4000': '通算4000勝', 'wins_5000': '通算5000勝', 'wins_7777': '通算7777勝', 'wins_10000': '通算10000勝',
+           'games_50': '通算50試合', 'games_100': '通算100試合', 'games_200': '通算200試合', 'games_300': '通算300試合', 'games_400': '通算400試合', 'games_500': '通算500試合', 'games_600': '通算600試合', 'games_700': '通算700試合', 'games_777': '通算777試合', 'games_800': '通算800試合', 'games_900': '通算900試合', 'games_1000': '通算1000試合', 'games_1500': '通算1500試合', 'games_2000': '通算2000試合', 'games_2500': '通算2500試合', 'games_3000': '通算3000試合', 'games_4000': '通算4000試合', 'games_5000': '通算5000試合', 'games_7777': '通算7777試合', 'games_10000': '通算10000試合',
+           'streak_5': '5連勝', 'streak_6': '6連勝', 'streak_7': '7連勝', 'streak_8': '8連勝', 'streak_9': '9連勝', 'streak_10': '10連勝', 'streak_15': '15連勝', 'streak_20': '20連勝', 'streak_30': '30連勝', 'streak_40': '40連勝', 'streak_50': '50連勝',
+       };
+       const WIN_ACHIEVEMENTS_MAP = { 50: 'wins_50', 100: 'wins_100', 200: 'wins_200', 300: 'wins_300', 400: 'wins_400', 500: 'wins_500', 600: 'wins_600', 700: 'wins_700', 777: 'wins_777', 800: 'wins_800', 900: 'wins_900', 1000: 'wins_1000', 1500: 'wins_1500', 2000: 'wins_2000', 2500: 'wins_2500', 3000: 'wins_3000', 4000: 'wins_4000', 5000: 'wins_5000', 7777: 'wins_7777', 10000: 'wins_10000' };
+       const GAME_ACHIEVEMENTS_MAP = { 50: 'games_50', 100: 'games_100', 200: 'games_200', 300: 'games_300', 400: 'games_400', 500: 'games_500', 600: 'games_600', 700: 'games_700', 777: 'games_777', 800: 'games_800', 900: 'games_900', 1000: 'games_1000', 1500: 'games_1500', 2000: 'games_2000', 2500: 'games_2500', 3000: 'games_3000', 4000: 'games_4000', 5000: 'games_5000', 7777: 'games_7777', 10000: 'games_10000' };
+       const STREAK_ACHIEVEMENTS_MAP = { 5: 'streak_5', 6: 'streak_6', 7: 'streak_7', 8: 'streak_8', 9: 'streak_9', 10: 'streak_10', 15: 'streak_15', 20: 'streak_20', 30: 'streak_30', 40: 'streak_40', 50: 'streak_50' };
+
+
+       const App = {
+           data() {
+               return {
+                   loading: true,
+                   isRecalculating: false,
+                   activeTab: 'ranking',
+                   members: [],
+                   matches: [],
+                   ranking: [],
+                   challengeRights: [],
+                   newMemberName: '',
+                   match: { player1Id: '', player2Id: '', winnerId: '' },
+                   rankingMatch: { challengeId: '', winnerId: '' },
+                   selectedMember: null,
+                   matchToDelete: null,
+                   matchToEdit: null,
+                   historyMenuOpenForMatchId: null,
+                   titles: TITLES,
+                   db: null,
+                   auth: null
+               };
+           },
+           computed: {
+               rankedMembers() {
+                   return this.ranking.map(memberId => this.members.find(m => m.id === memberId)).filter(Boolean);
+               },
+               availablePlayers1() {
+                   return this.members.filter(m => m.id !== this.match.player1Id);
+               },
+               availablePlayers2() {
+                   return this.members.filter(m => m.id !== this.match.player2Id);
+               },
+               availableChallenges() {
+                   return this.challengeRights.map(cr => {
+                       const challenger = this.getMember(cr.challengerId);
+                       const target = this.getMember(cr.targetId);
+                       const challengerRank = this.getRank(cr.challengerId);
+                       const targetRank = this.getRank(cr.targetId);
+
+
+                       if (!challenger || !target || challengerRank === -1 || targetRank === -1 || challengerRank < targetRank) return null;
+
+
+                       const rankDiff = challengerRank - targetRank;
+                       const requiredWins = rankDiff * 10;
+                      
+                       if (cr.winCount >= requiredWins) {
+                           return {
+                               id: cr.id,
+                               challengerId: cr.challengerId,
+                               targetId: cr.targetId,
+                               challengerName: challenger.name,
+                               targetName: target.name
+                           };
+                       }
+                       return null;
+                   }).filter(Boolean);
+               },
+               selectedChallenge() {
+                   if (!this.rankingMatch.challengeId) return null;
+                   return this.availableChallenges.find(c => c.id === this.rankingMatch.challengeId);
+               }
+           },
+           methods: {
+               async initializeFirebase() {
+                   try {
+                    const firebaseConfig = {
+                        apiKey: "AIzaSyB-UKi0ZjOqu8RwYrP-YpxqSYQhZKKbaXU",
+                        authDomain: "tabletennis-e2f4f.firebaseapp.com",
+                        projectId: "tabletennis-e2f4f",
+                        storageBucket: "tabletennis-e2f4f.firebasestorage.app",
+                        messagingSenderId: "920016325682",
+                        appId: "1:920016325682:web:8a76492a35a71bad36402b",
+                        measurementId: "G-GZ2693V6GT"
+                        }; 
+
+                       const app = initializeApp(firebaseConfig);
+                       this.db = getFirestore(app);
+                       this.auth = getAuth(app);
+                      
+                       onAuthStateChanged(this.auth, (user) => {
+                           if (user) {
+                               this.setupFirestoreListeners();
+                           } else {
+                               this.loading = false;
+                           }
+                       });
+
+
+                       const token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+                       if (token) {
+                           await signInWithCustomToken(this.auth, token);
+                       } else {
+                           await signInAnonymously(this.auth);
+                       }
+                   } catch (error) {
+                       console.error("Firebase initialization or authentication failed:", error);
+                       alert("データベースへの接続または認証に失敗しました。");
+                       this.loading = false;
+                   }
+               },
+              
+               setupFirestoreListeners() {
+                   try {
+                       const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id-keirinkan-ttc';
+                       const dbPath = `/artifacts/${appId}/public/data/`;
+                      
+                       let initialLoads = 4;
+                       const onInitialLoad = () => {
+                           initialLoads--;
+                           if (initialLoads === 0) {
+                               this.loading = false;
+                           }
+                       };
+
+
+                       onSnapshot(collection(this.db, dbPath + 'members'), (snapshot) => {
+                           this.members = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                           if (initialLoads > 0) onInitialLoad();
+                       }, (error) => console.error("Members listener error:", error));
+
+
+                       onSnapshot(query(collection(this.db, dbPath + 'matches'), orderBy('date', 'desc')), (snapshot) => {
+                           this.matches = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                           if (initialLoads > 0) onInitialLoad();
+                       }, (error) => console.error("Matches listener error:", error));
+                      
+                       onSnapshot(doc(this.db, dbPath + 'ranking/current'), (doc) => {
+                           if (doc.exists()) {
+                               this.ranking = doc.data().order || [];
+                           }
+                           if (initialLoads > 0) onInitialLoad();
+                       }, (error) => console.error("Ranking listener error:", error));
+                      
+                       onSnapshot(collection(this.db, dbPath + 'challengeRights'), (snapshot) => {
+                           this.challengeRights = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                           if (initialLoads > 0) onInitialLoad();
+                       }, (error) => console.error("ChallengeRights listener error:", error));
+                   } catch (error) {
+                       console.error("Failed to set up Firestore listeners:", error);
+                       alert("データの取得に失敗しました。");
+                       this.loading = false;
+                   }
+               },
+              
+               getMember(memberId) { return this.members.find(m => m.id === memberId); },
+               getMemberName(memberId) { return this.getMember(memberId)?.name || '不明'; },
+               getRank(memberId) { return this.ranking.indexOf(memberId); },
+               getTitleInfo(rating) {
+                   if (rating === 1500) return this.titles.find(t => t.name === '初期値');
+                   return this.titles.find(t => rating >= t.min && (!t.max || rating <= t.max)) || { name: '---', color: '#000' };
+               },
+               getAchievementText(achId) {
+                   if (ACHIEVEMENTS[achId]) return ACHIEVEMENTS[achId];
+                   if (achId.startsWith('monthly_')) {
+                       const parts = achId.split('_');
+                       const year = parts[1];
+                       const month = parts[2];
+                       const type = parts[3];
+                       const value = parts[4];
+                       if (type === 'wins') return `${year}年${month}月 ${value}勝達成`;
+                       if (type === 'games') return `${year}年${month}月 ${value}試合達成`;
+                       if (type === 'winrate') return `${year}年${month}月 勝率${value}%達成`;
+                       if (type === 'mostwins') return `${year}年${month}月 月間最多勝`;
+                       if (type === 'bestwinrate') return `${year}年${month}月 月間最高勝率`;
+                   }
+                   return achId;
+               },
+               getChallengeRight(memberId) {
+                   const myRank = this.getRank(memberId);
+                   if (myRank === -1) return null;
+
+
+                   for (const right of this.challengeRights) {
+                       if (right.challengerId === memberId) {
+                           const targetRank = this.getRank(right.targetId);
+                           if (targetRank !== -1 && myRank > targetRank) {
+                               const rankDiff = myRank - targetRank;
+                               const requiredWins = rankDiff * 10;
+                               if (right.winCount >= requiredWins) {
+                                   return { targetName: this.getMemberName(right.targetId) };
+                               }
+                           }
+                       }
+                   }
+                   return null;
+               },
+              
+               async addMember() {
+                   if (!this.newMemberName.trim()) return;
+                   if (this.members.some(m => m.name === this.newMemberName.trim())) {
+                       alert('同じ名前の部員が既に存在します。');
+                       return;
+                   }
+
+
+                   try {
+                       const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id-keirinkan-ttc';
+                       const dbPath = `/artifacts/${appId}/public/data/`;
+                      
+                       const newMember = {
+                           name: this.newMemberName.trim(),
+                           currentRating: INITIAL_RATING,
+                           maxRating: INITIAL_RATING,
+                           wins: 0, losses: 0, totalGames: 0,
+                           winStreak: 0, maxWinStreak: 0,
+                           achievements: [],
+                           createdAt: serverTimestamp()
+                       };
+                       const docRef = await addDoc(collection(this.db, dbPath + 'members'), newMember);
+                      
+                       const newRanking = [...this.ranking, docRef.id];
+                       if(this.members.length === 0){
+                          for (let i = newRanking.length - 1; i > 0; i--) {
+                               const j = Math.floor(Math.random() * (i + 1));
+                               [newRanking[i], newRanking[j]] = [newRanking[j], newRanking[i]];
+                           }
+                       }
+                       await setDoc(doc(this.db, dbPath + 'ranking/current'), { order: newRanking }, { merge: true });
+
+
+                       this.newMemberName = '';
+                       alert(`${newMember.name}さんを部員として追加しました。`);
+                   } catch (error) {
+                       console.error("部員追加エラー:", error);
+                       alert("部員の追加に失敗しました。");
+                   }
+               },
+              
+               async addMatch(isRankingMatch = false) {
+                   const player1Id = isRankingMatch ? this.selectedChallenge.challengerId : this.match.player1Id;
+                   const player2Id = isRankingMatch ? this.selectedChallenge.targetId : this.match.player2Id;
+                   const winnerId = isRankingMatch ? this.rankingMatch.winnerId : this.match.winnerId;
+
+
+                   if (!player1Id || !player2Id || !winnerId) {
+                       alert("選手と勝者を選択してください。");
+                       return;
+                   }
+
+
+                   const loserId = (winnerId === player1Id) ? player2Id : player1Id;
+                   const winner = this.getMember(winnerId);
+                   const loser = this.getMember(loserId);
+
+
+                   if (!winner || !loser) {
+                       alert("部員情報が見つかりません。");
+                       return;
+                   }
+                  
+                   const winnerRating = winner.currentRating;
+                   const loserRating = loser.currentRating;
+                   const winnerExpected = 1 / (1 + Math.pow(10, (loserRating - winnerRating) / 400));
+                   const ratingChangeWinner = K_FACTOR * (1 - winnerExpected);
+
+
+                   const newWinnerRating = winnerRating + ratingChangeWinner;
+                   const newLoserRating = loser.currentRating - ratingChangeWinner;
+                   
+                   const winnerUpdate = {
+                       currentRating: newWinnerRating,
+                       maxRating: Math.max(winner.maxRating, newWinnerRating),
+                       wins: winner.wins + 1,
+                       totalGames: winner.totalGames + 1,
+                       winStreak: winner.winStreak + 1,
+                       maxWinStreak: Math.max(winner.maxWinStreak, winner.winStreak + 1),
+                       achievements: [...winner.achievements]
+                   };
+                   const loserUpdate = {
+                       currentRating: newLoserRating,
+                       losses: loser.losses + 1,
+                       totalGames: loser.totalGames + 1,
+                       winStreak: 0,
+                       achievements: [...loser.achievements]
+                   };
+
+
+                   this.checkAchievements(winner, winnerUpdate);
+                   this.checkAchievements(loser, loserUpdate);
+                  
+                   try {
+                       const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id-keirinkan-ttc';
+                       const dbPath = `/artifacts/${appId}/public/data/`;
+                       const batch = writeBatch(this.db);
+                      
+                       batch.update(doc(this.db, dbPath + `members/${winnerId}`), winnerUpdate);
+                       batch.update(doc(this.db, dbPath + `members/${loserId}`), loserUpdate);
+                      
+                       batch.set(doc(collection(this.db, dbPath + 'matches')), {
+                           date: serverTimestamp(),
+                           player1Id, player2Id, winnerId, loserId,
+                           ratingChangeWinner: ratingChangeWinner,
+                           ratingChangeLoser: -ratingChangeWinner,
+                           isRankingMatch
+                       });
+
+
+                       if (isRankingMatch) {
+                           if (winnerId === this.selectedChallenge.challengerId) {
+                               const newRanking = [...this.ranking];
+                               const winnerIndex = this.getRank(winnerId);
+                               const loserIndex = this.getRank(loserId);
+                               [newRanking[winnerIndex], newRanking[loserIndex]] = [newRanking[loserIndex], newRanking[winnerIndex]];
+                               batch.update(doc(this.db, dbPath + 'ranking/current'), { order: newRanking });
+                           }
+                           const challengeDocId = `${this.selectedChallenge.challengerId}_${this.selectedChallenge.targetId}`;
+                           batch.update(doc(this.db, dbPath + `challengeRights/${challengeDocId}`), { winCount: 0 });
+                       } else {
+                           const winnerRank = this.getRank(winnerId);
+                           const loserRank = this.getRank(loserId);
+                           if (winnerRank > loserRank) {
+                               const challengeDocId = `${winnerId}_${loserId}`;
+                               const challengeDocRef = doc(this.db, dbPath + `challengeRights/${challengeDocId}`);
+                               const challengeDoc = await getDoc(challengeDocRef);
+                               const currentWins = challengeDoc.exists() ? challengeDoc.data().winCount : 0;
+                               batch.set(challengeDocRef, {
+                                   challengerId: winnerId, targetId: loserId, winCount: currentWins + 1
+                               }, { merge: true });
+                           }
+                       }
+                      
+                       if (this.matches.length + 1 === 100) {
+                           alert('通算100試合達成！ランキングを現在のレート順に更新します。');
+                           const membersCopy = [...this.members];
+                           membersCopy.find(m => m.id === winnerId).currentRating = newWinnerRating;
+                           membersCopy.find(m => m.id === loserId).currentRating = newLoserRating;
+                           const sortedMembers = membersCopy.sort((a, b) => b.currentRating - a.currentRating);
+                           const newRanking = sortedMembers.map(m => m.id);
+                           batch.update(doc(this.db, dbPath + 'ranking/current'), { order: newRanking });
+                       }
+
+
+                       await batch.commit();
+                       alert("試合結果を登録しました。");
+                       this.match = { player1Id: '', player2Id: '', winnerId: '' };
+                       this.rankingMatch = { challengeId: '', winnerId: '' };
+                   } catch (error) {
+                       console.error("試合結果登録エラー:", error);
+                       alert("試合結果の登録に失敗しました。");
+                   }
+               },
+               addRankingMatch() { this.addMatch(true); },
+               checkAchievements(member, updatedMember) {
+                   if (WIN_ACHIEVEMENTS_MAP[updatedMember.wins] && !member.achievements.includes(WIN_ACHIEVEMENTS_MAP[updatedMember.wins])) updatedMember.achievements.push(WIN_ACHIEVEMENTS_MAP[updatedMember.wins]);
+                   if (GAME_ACHIEVEMENTS_MAP[updatedMember.totalGames] && !member.achievements.includes(GAME_ACHIEVEMENTS_MAP[updatedMember.totalGames])) updatedMember.achievements.push(GAME_ACHIEVEMENTS_MAP[updatedMember.totalGames]);
+                   if (STREAK_ACHIEVEMENTS_MAP[updatedMember.winStreak] && !member.achievements.includes(STREAK_ACHIEVEMENTS_MAP[updatedMember.winStreak])) updatedMember.achievements.push(STREAK_ACHIEVEMENTS_MAP[updatedMember.winStreak]);
+               },
+               showMemberDetails(member) { this.selectedMember = member; },
+               getMemberMatches(memberId) {
+                   return this.matches.filter(m => m.player1Id === memberId || m.player2Id === memberId).slice(0, 10);
+               },
+
+
+               // --- 試合の修正・削除 ---
+               toggleHistoryMenu(matchId) {
+                   this.historyMenuOpenForMatchId = this.historyMenuOpenForMatchId === matchId ? null : matchId;
+               },
+               confirmDeleteMatch(match) {
+                   this.matchToDelete = match;
+                   this.historyMenuOpenForMatchId = null;
+               },
+               cancelDelete() { this.matchToDelete = null; },
+               openEditModal(match) {
+                   this.matchToEdit = { ...match };
+                   this.historyMenuOpenForMatchId = null;
+               },
+               cancelEdit() { this.matchToEdit = null; },
+
+
+               async deleteConfirmedMatch() {
+                   if (!this.matchToDelete) return;
+                   await this.runFullRecalculation({ deleteMatchId: this.matchToDelete.id });
+                   this.matchToDelete = null;
+               },
+
+
+               async saveMatchEdit() {
+                   if (!this.matchToEdit) return;
+                   await this.runFullRecalculation({ editMatch: this.matchToEdit });
+                   this.matchToEdit = null;
+               },
+              
+               async runFullRecalculation({ deleteMatchId = null, editMatch = null } = {}) {
+                   this.isRecalculating = true;
+                   try {
+                       const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id-keirinkan-ttc';
+                       const dbPath = `/artifacts/${appId}/public/data/`;
+
+
+                       let processedMatches = this.matches.slice();
+                       if (deleteMatchId) {
+                           processedMatches = processedMatches.filter(m => m.id !== deleteMatchId);
+                       }
+                       if (editMatch) {
+                           const index = processedMatches.findIndex(m => m.id === editMatch.id);
+                           if (index !== -1) {
+                               processedMatches[index].winnerId = editMatch.winnerId;
+                               processedMatches[index].loserId = [editMatch.player1Id, editMatch.player2Id].find(id => id !== editMatch.winnerId);
+                           }
+                       }
+                      
+                       processedMatches.sort((a, b) => a.date.seconds - b.date.seconds);
+
+
+                       let tempMembers = JSON.parse(JSON.stringify(this.members));
+                       tempMembers.forEach(member => {
+                           member.currentRating = INITIAL_RATING;
+                           member.maxRating = INITIAL_RATING;
+                           member.wins = 0; member.losses = 0; member.totalGames = 0;
+                           member.winStreak = 0; member.maxWinStreak = 0;
+                           member.achievements = [];
+                       });
+                      
+                       processedMatches.forEach((match) => {
+                           const winner = tempMembers.find(m => m.id === match.winnerId);
+                           const loser = tempMembers.find(m => m.id === match.loserId);
+                           if (!winner || !loser) return;
+
+
+                           const winnerRating = winner.currentRating;
+                           const loserRating = loser.currentRating;
+                           const winnerExpected = 1 / (1 + Math.pow(10, (loserRating - winnerRating) / 400));
+                           const ratingChange = K_FACTOR * (1 - winnerExpected);
+
+
+                           winner.currentRating += ratingChange;
+                           loser.currentRating -= ratingChange;
+                          
+                           winner.maxRating = Math.max(winner.maxRating, winner.currentRating);
+                           winner.wins += 1;
+                           loser.losses += 1;
+                           winner.totalGames += 1;
+                           loser.totalGames += 1;
+                           winner.winStreak += 1;
+                           winner.maxWinStreak = Math.max(winner.maxWinStreak, winner.winStreak);
+                           loser.winStreak = 0;
+
+
+                           this.checkAchievements(this.getMember(winner.id), winner);
+                           this.checkAchievements(this.getMember(loser.id), loser);
+                          
+                           match.ratingChangeWinner = ratingChange;
+                           match.ratingChangeLoser = -ratingChange;
+                       });
+
+
+                       const batch = writeBatch(this.db);
+                       tempMembers.forEach(member => {
+                           batch.update(doc(this.db, dbPath + `members/${member.id}`), {
+                               currentRating: member.currentRating, maxRating: member.maxRating,
+                               wins: member.wins, losses: member.losses, totalGames: member.totalGames,
+                               winStreak: member.winStreak, maxWinStreak: member.maxWinStreak,
+                               achievements: member.achievements
+                           });
+                       });
+                      
+                       processedMatches.forEach(match => {
+                            batch.update(doc(this.db, dbPath + `matches/${match.id}`), {
+                               ratingChangeWinner: match.ratingChangeWinner,
+                               ratingChangeLoser: match.ratingChangeLoser,
+                               winnerId: match.winnerId,
+                               loserId: match.loserId
+                           });
+                       });
+
+
+                       if (deleteMatchId) {
+                           batch.delete(doc(this.db, dbPath + `matches/${deleteMatchId}`));
+                       }
+                      
+                       await batch.commit();
+                       alert("データの再計算と更新が完了しました。");
+                   } catch (error) {
+                       console.error("再計算エラー:", error);
+                       alert("データの再計算中にエラーが発生しました。");
+                   } finally {
+                       this.isRecalculating = false;
+                   }
+               }
+           },
+           mounted() {
+               this.initializeFirebase();
+           }
+       };
+
+
+       Vue.createApp(App).mount('#app');
+   </script>
+</body>
+</html>
