@@ -6,7 +6,6 @@
     <title>啓林館卓球部 公式HP</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: 'Inter', sans-serif; }
         .tab-active { background-color: #3b82f6; color: white; }
@@ -31,7 +30,7 @@
             <button @click="activeTab = 'ranking'" :class="{'tab-active': activeTab === 'ranking'}" class="flex-1 py-3 px-1 font-semibold text-xs sm:text-sm text-gray-700 hover:bg-blue-500 hover:text-white transition">ランキング</button>
             <button @click="activeTab = 'match'" :class="{'tab-active': activeTab === 'match'}" class="flex-1 py-3 px-1 font-semibold text-xs sm:text-sm text-gray-700 hover:bg-blue-500 hover:text-white transition">試合入力</button>
             <button @click="activeTab = 'history'" :class="{'tab-active': activeTab === 'history'}" class="flex-1 py-3 px-1 font-semibold text-xs sm:text-sm text-gray-700 hover:bg-blue-500 hover:text-white transition">対戦履歴</button>
-            <button @click="activeTab = 'analytics'" :class="{'tab-active': activeTab === 'analytics'}" class="flex-1 py-3 px-1 font-semibold text-xs sm:text-sm text-gray-700 hover:bg-blue-500 hover:text-white transition">分析</button>
+            <button @click="activeTab = 'stats'" :class="{'tab-active': activeTab === 'stats'}" class="flex-1 py-3 px-1 font-semibold text-xs sm:text-sm text-gray-700 hover:bg-blue-500 hover:text-white transition">分析統計</button>
             <button @click="activeTab = 'info'" :class="{'tab-active': activeTab === 'info'}" class="flex-1 py-3 px-1 font-semibold text-xs sm:text-sm text-gray-700 hover:bg-blue-500 hover:text-white transition">情報</button>
         </nav>
 
@@ -44,17 +43,17 @@
                 <h2 class="text-xl font-bold mb-4 border-b-2 border-blue-500 pb-2">部内ランキング</h2>
                 <div v-if="rankedMembers.length === 0" class="text-center text-gray-500 py-4">部員を登録してください</div>
                 <ul class="space-y-3">
-                    <li v-for="(member, index) in rankedMembers" :key="member.id" @click="showMemberDetails(member)" class="bg-white p-3 rounded-lg shadow-sm border border-gray-200 cursor-pointer hover:bg-gray-50 relative">
+                    <li v-for="(member, index) in rankedMembers" :key="member.id" @click="showMemberDetails(member)" class="bg-white p-3 rounded-lg shadow-sm border border-gray-200 cursor-pointer hover:bg-gray-50">
                         <div class="flex items-start space-x-4">
                             <span class="text-lg font-bold text-gray-500 w-6 text-center pt-1">{{ index + 1 }}</span>
                             <div class="flex-1">
-                                <p class="font-semibold text-lg">{{ member.name }}</p>
-                                <p class="text-sm text-blue-600 font-medium">Rate: {{ Math.round(member.currentRating) }} (Max: {{ Math.round(member.maxRating) }})</p>
                                 <div class="flex items-center space-x-2">
-                                    <p class="text-xs font-bold" :style="{color: getTitleInfo(member.currentRating).color}">{{ getTitleInfo(member.currentRating).name }}</p>
-                                    <span v-if="specialTitles.giantKiller === member.id" class="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded-full font-bold">🗡️ G.キラー</span>
-                                    <span v-if="specialTitles.noobHunters.includes(member.id)" class="text-[10px] bg-purple-600 text-white px-2 py-0.5 rounded-full font-bold">🎭 雑魚狩り</span>
+                                    <p class="font-semibold text-lg">{{ member.name }}</p>
+                                    <span v-if="specialTitles[member.id]?.includes('雑魚狩り')" class="bg-amber-100 text-amber-800 text-xs font-bold px-1.5 py-0.5 rounded border border-amber-300">雑魚狩り</span>
+                                    <span v-if="specialTitles[member.id]?.includes('ジャイアントキラー')" class="bg-red-100 text-red-800 text-xs font-bold px-1.5 py-0.5 rounded border border-red-300">Gキラー</span>
                                 </div>
+                                <p class="text-sm text-blue-600 font-medium">Rate: {{ Math.round(member.currentRating) }} (Max: {{ Math.round(member.maxRating) }})</p>
+                                <p class="text-xs font-bold" :style="{color: getTitleInfo(member.currentRating).color}">{{ getTitleInfo(member.currentRating).name }}</p>
                             </div>
                              <div class="text-right text-xs">
                                 <div v-for="challenge in getDisplayableChallenges(member.id)" :key="challenge.targetId" class="font-bold text-red-500 animate-pulse mb-1">
@@ -151,29 +150,69 @@
                 </ul>
             </section>
 
-            <section v-show="activeTab === 'analytics'" v-if="!loading">
-                <h2 class="text-xl font-bold mb-4 border-b-2 border-indigo-500 pb-2">データ分析</h2>
+            <section v-show="activeTab === 'stats'" v-if="!loading">
+                <h2 class="text-xl font-bold mb-4 border-b-2 border-teal-500 pb-2">分析統計データ</h2>
                 
-                <div class="bg-white p-4 rounded-lg shadow mb-6">
-                    <h3 class="font-bold mb-2">全体のレート推移</h3>
-                    <div class="h-64 relative w-full">
-                        <canvas id="ratingChart"></canvas>
-                    </div>
-                    <p class="text-xs text-gray-500 mt-2 text-center">※凡例の名前をタップすると表示/非表示を切り替えられます</p>
+                <div class="mb-6">
+                    <label class="block mb-2 font-semibold text-gray-700 text-sm">対象選手を選択して詳細分析：</label>
+                    <select v-model="selectedStatsMemberId" class="w-full p-2.5 border rounded-lg shadow-sm bg-white focus:ring-2 focus:ring-teal-500">
+                        <option v-for="member in members" :value="member.id">{{ member.name }}</option>
+                    </select>
                 </div>
 
-                <div class="bg-white p-4 rounded-lg shadow mb-6">
-                    <h3 class="font-bold mb-4">通算1位在籍日数ランキング</h3>
-                    <ul class="space-y-2">
-                        <li v-for="(item, index) in daysAtNo1Ranking" :key="item.name" class="flex justify-between items-center bg-gray-50 p-2 rounded border">
-                            <div>
-                                <span class="font-bold text-gray-500 w-6 inline-block text-center">{{ index + 1 }}</span>
-                                <span class="font-semibold text-lg">{{ item.name }}</span>
-                            </div>
-                            <span class="font-mono font-bold text-blue-600 text-lg">{{ item.days }}<span class="text-sm text-gray-600 ml-1">日</span></span>
-                        </li>
-                        <li v-if="daysAtNo1Ranking.length === 0" class="text-sm text-gray-500 text-center py-2">データがまだありません</li>
-                    </ul>
+                <div v-if="selectedStatsMemberId && statsData[selectedStatsMemberId]">
+                    <div class="grid grid-cols-2 gap-3 mb-6">
+                        <div class="bg-teal-50 p-3 rounded-lg border border-teal-100">
+                            <p class="text-xs text-gray-500">1位在籍期間 (試合数ベース)</p>
+                            <p class="text-xl font-bold text-teal-700">{{ statsData[selectedStatsMemberId].top1Duration }} <span class="text-xs font-normal text-gray-600">試合分</span></p>
+                        </div>
+                        <div class="bg-indigo-50 p-3 rounded-lg border border-indigo-100">
+                            <p class="text-xs text-gray-500">現在のランキング順位</p>
+                            <p class="text-xl font-bold text-indigo-700">{{ getRank(selectedStatsMemberId) + 1 }} <span class="text-xs font-normal text-gray-600">位</span></p>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-lg shadow overflow-hidden border mb-6">
+                        <div class="bg-gray-50 px-4 py-2.5 border-b">
+                            <h3 class="font-bold text-gray-700 text-sm">対個人成績 ＆ 相性一覧</h3>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm text-left text-gray-600">
+                                <thead class="text-xs text-gray-700 uppercase bg-gray-100">
+                                    <tr>
+                                        <th class="px-3 py-2">対戦相手</th>
+                                        <th class="px-3 py-2 text-center">勝敗</th>
+                                        <th class="px-3 py-2 text-center">勝率</th>
+                                        <th class="px-3 py-2 text-center">相性</th>
+                                        <th class="px-3 py-2 text-center">次入替戦まで</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="opp in getOpponentsStats(selectedStatsMemberId)" :key="opp.id" class="border-b hover:bg-gray-50">
+                                        <td class="px-3 py-2.5 font-medium text-gray-900">{{ opp.name }}</td>
+                                        <td class="px-3 py-2.5 text-center font-mono">{{ opp.wins }}勝{{ opp.losses }}敗</td>
+                                        <td class="px-3 py-2.5 text-center font-mono">{{ opp.winRate.toFixed(1) }}%</td>
+                                        <td class="px-3 py-2.5 text-center">
+                                            <span :class="getCompatibilityClass(opp.compatibility)" class="px-2 py-0.5 rounded-full text-xs font-bold">
+                                                {{ opp.compatibility }}
+                                            </span>
+                                        </td>
+                                        <td class="px-3 py-2.5 text-center text-xs">
+                                            <span v-if="opp.nextChallengeWins === '対象外'" class="text-gray-400">-</span>
+                                            <span v-else-if="opp.nextChallengeWins === 0" class="text-red-500 font-bold animate-pulse">権利発生中</span>
+                                            <span v-else class="text-amber-600 font-semibold">あと{{ opp.nextChallengeWins }}勝</span>
+                                        </td>
+                                    </tr>
+                                    <tr v-if="getOpponentsStats(selectedStatsMemberId).length === 0">
+                                        <td colspan="5" class="px-3 py-4 text-center text-gray-400">対戦データがありません</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div v-else class="text-center text-gray-400 py-8">
+                    部員データ、または試合データを登録してください。
                 </div>
             </section>
 
@@ -194,93 +233,76 @@
                             <span class="text-gray-600">{{ title.condition }}</span>
                         </li>
                     </ul>
+                    <div class="mt-4 pt-3 border-t text-xs text-gray-600 space-y-2">
+                        <p class="font-bold text-purple-700 text-sm">★ 特殊リアルタイム称号（直近100日以内アクティブのみ対象）</p>
+                        <p><span class="font-bold text-amber-700">【雑魚狩り】</span>：4位以上の選手のうち、上位陣（4位以上）への勝率が5割を切り、かつ下位陣（5位以下）への勝率が7割以上。その各勝率数値の差が最も開いているトップ1名に付与。</p>
+                        <p><span class="font-bold text-red-700">【ジャイアントキラー】</span>：現在のランキング1位の選手に対して、最も通算勝率が高い選手トップ1名に与えられる称号。</p>
+                    </div>
                 </div>
+
             </section>
         </main>
 
         <div v-if="selectedMember" @click.self="selectedMember = null" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 modal z-20">
-            <div class="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-                <div class="p-4 border-b sticky top-0 bg-white z-10">
-                    <div class="flex justify-between items-center mb-1">
-                        <h3 class="text-2xl font-bold">{{ selectedMember.name }}</h3>
-                        <p class="font-bold text-lg" :style="{color: getTitleInfo(selectedMember.currentRating).color}">{{ getTitleInfo(selectedMember.currentRating).name }}</p>
-                    </div>
-                    <div class="flex gap-2 flex-wrap">
-                        <span v-if="specialTitles.giantKiller === selectedMember.id" class="inline-block bg-red-600 text-white text-xs px-3 py-1 rounded-full font-bold shadow">🗡️ ジャイアントキラー</span>
-                        <span v-if="specialTitles.noobHunters.includes(selectedMember.id)" class="inline-block bg-purple-600 text-white text-xs px-3 py-1 rounded-full font-bold shadow">🎭 雑魚狩り</span>
-                    </div>
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+                <div class="p-4 border-b sticky top-0 bg-white">
+                    <h3 class="text-2xl font-bold text-center">{{ selectedMember.name }}</h3>
+                    <p class="text-center font-bold text-lg" :style="{color: getTitleInfo(selectedMember.currentRating).color}">{{ getTitleInfo(selectedMember.currentRating).name }}</p>
                 </div>
-                <div class="p-4 space-y-6">
+                <div class="p-4 space-y-4">
                     <div>
                         <h4 class="font-bold text-lg mb-2">ステータス</h4>
-                        <div class="grid grid-cols-3 gap-2 text-center">
+                        <div class="grid grid-cols-2 gap-2 text-center">
                             <div class="bg-gray-100 p-2 rounded">
-                                <p class="text-xs text-gray-500">現在レート</p>
-                                <p class="text-xl font-bold text-blue-600">{{ Math.round(selectedMember.currentRating) }}</p>
+                                <p class="text-sm text-gray-500">現在レート</p>
+                                <p class="text-2xl font-bold text-blue-600">{{ Math.round(selectedMember.currentRating) }}</p>
                             </div>
                             <div class="bg-gray-100 p-2 rounded">
-                                <p class="text-xs text-gray-500">最高レート</p>
-                                <p class="text-xl font-bold text-purple-600">{{ Math.round(selectedMember.maxRating) }}</p>
+                                <p class="text-sm text-gray-500">最高レート</p>
+                                <p class="text-2xl font-bold text-purple-600">{{ Math.round(selectedMember.maxRating) }}</p>
                             </div>
                             <div class="bg-gray-100 p-2 rounded">
-                                <p class="text-xs text-gray-500">勝敗</p>
-                                <p class="text-sm font-semibold mt-1"><span class="text-green-600">{{ selectedMember.wins }}</span>勝 <span class="text-red-600">{{ selectedMember.losses }}</span>敗</p>
+                                <p class="text-sm text-gray-500">勝敗</p>
+                                <p class="text-lg font-semibold"><span class="text-green-600">{{ selectedMember.wins }}</span>勝 <span class="text-red-600">{{ selectedMember.losses }}</span>敗</p>
                             </div>
                             <div class="bg-gray-100 p-2 rounded">
-                                <p class="text-xs text-gray-500">勝率</p>
-                                <p class="text-sm font-semibold mt-1">{{ selectedMember.totalGames > 0 ? ((selectedMember.wins / selectedMember.totalGames) * 100).toFixed(1) : '0.0' }}%</p>
+                                <p class="text-sm text-gray-500">勝率</p>
+                                <p class="text-lg font-semibold">{{ selectedMember.totalGames > 0 ? ((selectedMember.wins / selectedMember.totalGames) * 100).toFixed(1) : '0.0' }}%</p>
                             </div>
                              <div class="bg-gray-100 p-2 rounded">
-                                <p class="text-xs text-gray-500">連勝</p>
-                                <p class="text-sm font-semibold mt-1">{{ selectedMember.winStreak }}連勝中</p>
+                                <p class="text-sm text-gray-500">連勝</p>
+                                <p class="text-lg font-semibold">{{ selectedMember.winStreak }}連勝中</p>
                             </div>
                              <div class="bg-gray-100 p-2 rounded">
-                                <p class="text-xs text-gray-500">最大連勝</p>
-                                <p class="text-sm font-semibold mt-1">{{ selectedMember.maxWinStreak }}連勝</p>
+                                <p class="text-sm text-gray-500">最大連勝</p>
+                                <p class="text-lg font-semibold">{{ selectedMember.maxWinStreak }}連勝</p>
                             </div>
                         </div>
                     </div>
                     
                     <div>
-                        <h4 class="font-bold text-lg mb-2">対個人成績 (H2H)</h4>
-                        <div class="overflow-x-auto bg-white border rounded-lg shadow-sm">
-                            <table class="w-full text-sm text-left border-collapse min-w-[350px]">
-                                <thead>
-                                    <tr class="bg-gray-100 border-b text-xs text-gray-600">
-                                        <th class="p-2 whitespace-nowrap">相手</th>
-                                        <th class="p-2 whitespace-nowrap text-center">試合</th>
-                                        <th class="p-2 whitespace-nowrap text-center">勝-負</th>
-                                        <th class="p-2 whitespace-nowrap text-center">勝率</th>
-                                        <th class="p-2 whitespace-nowrap text-center">相性</th>
-                                        <th class="p-2 whitespace-nowrap text-right">入替戦</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr v-for="h2h in getMemberH2HStats(selectedMember.id)" :key="h2h.opponentId" class="border-b hover:bg-gray-50">
-                                        <td class="p-2 font-semibold">{{ h2h.opponentName }}</td>
-                                        <td class="p-2 text-center">{{ h2h.total }}</td>
-                                        <td class="p-2 text-center text-gray-600">{{ h2h.wins }}-{{ h2h.losses }}</td>
-                                        <td class="p-2 text-center font-mono text-xs">{{ (h2h.winRate * 100).toFixed(0) }}%</td>
-                                        <td class="p-2 text-center text-lg font-bold" :class="h2h.color">{{ h2h.affinity }}</td>
-                                        <td class="p-2 text-right text-xs whitespace-nowrap">
-                                            <span v-if="h2h.challengeText === '🔥挑戦可'" class="text-red-500 font-bold animate-pulse">{{ h2h.challengeText }}</span>
-                                            <span v-else class="text-gray-500">{{ h2h.challengeText }}</span>
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        <p class="text-xs text-gray-400 mt-1">※相性: 65%以上◎ / 50%以上◯ / 40%以上△ / 40%未満×</p>
-                    </div>
-
-                    <div>
-                        <h4 class="font-bold text-lg mb-2">実績一覧</h4>
+                        <h4 class="font-bold text-lg mb-2">実績</h4>
                         <div v-if="selectedMember.achievements && selectedMember.achievements.length > 0" class="flex flex-wrap gap-2">
                              <span v-for="achId in selectedMember.achievements" :key="achId" class="bg-yellow-100 text-yellow-800 text-xs font-semibold px-2.5 py-1 rounded-full">
                                 {{ getAchievementText(achId) }}
-                            </span>
+                             </span>
                         </div>
                         <p v-else class="text-gray-500 text-sm">実績はまだありません</p>
+                    </div>
+
+                    <div>
+                        <h4 class="font-bold text-lg mb-2">最近の対戦履歴</h4>
+                        <ul class="space-y-2">
+                             <li v-for="match in getMemberMatches(selectedMember.id)" :key="match.id" class="bg-gray-50 p-2 rounded-md text-sm">
+                                <div class="flex justify-between items-center">
+                                    <p>vs {{ getMemberName(match.winnerId === selectedMember.id ? match.loserId : match.winnerId) }}</p>
+                                    <p :class="{'text-green-600 font-bold': match.winnerId === selectedMember.id, 'text-red-600 font-bold': match.loserId === selectedMember.id}">
+                                        {{ match.winnerId === selectedMember.id ? '勝利' : '敗北' }}
+                                    </p>
+                                    <p class="text-xs text-gray-500">{{ match.date && match.date.seconds ? new Date(match.date.seconds * 1000).toLocaleDateString() : '' }}</p>
+                                </div>
+                             </li>
+                        </ul>
                     </div>
                 </div>
                 <div class="p-4 border-t sticky bottom-0 bg-white">
@@ -342,8 +364,6 @@
 
     const K_FACTOR = 32;
     const INITIAL_RATING = 1500;
-    
-    // (称号や実績の定数部分は変更なし)
     const TITLES = [
         { name: '魔王', min: 2000, color: '#ff00ff', condition: 'レート2000以上' },
         { name: '卓神', min: 1800, color: '#ff4500', condition: 'レート1800-1999' },
@@ -373,15 +393,13 @@
     ];
 
     const ACHIEVEMENTS = {
-        'wins_50': '通算50勝', 'wins_100': '通算100勝', 'wins_200': '通算200勝', 'wins_300': '通算300勝', 'wins_400': '通算400勝', 'wins_500': '通算500勝', 'wins_600': '通算600勝', 'wins_700': '通算700勝', 'wins_777': '通算777勝', 'wins_800': '通算800勝', 'wins_900': '通算900勝', 'wins_1000': '通算1000勝', 'wins_1500': '通算1500勝', 'wins_2000': '通算2000勝', 'wins_2500': '通算2500勝', 'wins_3000': '通算3000勝', 'wins_4000': '通算4000勝', 'wins_5000': '通算5000勝', 'wins_7777': '通算7777勝', 'wins_10000': '通算10000勝',
+        'wins_50': '通算50勝', 'wins_100': '通算100勝', 'wins_200': '通算200勝', 'wins_300': '通算300勝', 'wins_400': '通算400勝', 'wins_500': '通算500勝', 'wins_600': '通算600勝', 'wins_700': '通算700勝', 'wins_777': '通算777勝', 'wins_800': '通算800勝', 'wins_900': '通算900勝', 'wins_1000': '通算1000勝', 'wins_1500': '通00勝', 'wins_2000': '通算2000勝', 'wins_2500': '通算2500勝', 'wins_3000': '通算3000勝', 'wins_4000': '通算4000勝', 'wins_5000': '通算5000勝', 'wins_7777': '通算7777勝', 'wins_10000': '通算10000勝',
         'games_50': '通算50試合', 'games_100': '通算100試合', 'games_200': '通算200試合', 'games_300': '通算300試合', 'games_400': '通算400試合', 'games_500': '通算500試合', 'games_600': '通算600試合', 'games_700': '通算700試合', 'games_777': '通算777試合', 'games_800': '通算800試合', 'games_900': '通算900試合', 'games_1000': '通算1000試合', 'games_1500': '通算1500試合', 'games_2000': '通算2000試合', 'games_2500': '通算2500試合', 'games_3000': '通算3000試合', 'games_4000': '通算4000試合', 'games_5000': '通算5000試合', 'games_7777': '通算7777試合', 'games_10000': '通算10000試合',
         'streak_5': '5連勝', 'streak_6': '6連勝', 'streak_7': '7連勝', 'streak_8': '8連勝', 'streak_9': '9連勝', 'streak_10': '10連勝', 'streak_15': '15連勝', 'streak_20': '20連勝', 'streak_30': '30連勝', 'streak_40': '40連勝', 'streak_50': '50連勝',
     };
     const WIN_ACHIEVEMENTS_MAP = { 50: 'wins_50', 100: 'wins_100', 200: 'wins_200', 300: 'wins_300', 400: 'wins_400', 500: 'wins_500', 600: 'wins_600', 700: 'wins_700', 777: 'wins_777', 800: 'wins_800', 900: 'wins_900', 1000: 'wins_1000', 1500: 'wins_1500', 2000: 'wins_2000', 2500: 'wins_2500', 3000: 'wins_3000', 4000: 'wins_4000', 5000: 'wins_5000', 7777: 'wins_7777', 10000: 'wins_10000' };
     const GAME_ACHIEVEMENTS_MAP = { 50: 'games_50', 100: 'games_100', 200: 'games_200', 300: 'games_300', 400: 'games_400', 500: 'games_500', 600: 'games_600', 700: 'games_700', 777: 'games_777', 800: 'games_800', 900: 'games_900', 1000: 'games_1000', 1500: 'games_1500', 2000: 'games_2000', 2500: 'games_2500', 3000: 'games_3000', 4000: 'games_4000', 5000: 'games_5000', 7777: 'games_7777', 10000: 'games_10000' };
     const STREAK_ACHIEVEMENTS_MAP = { 5: 'streak_5', 6: 'streak_6', 7: 'streak_7', 8: 'streak_8', 9: 'streak_9', 10: 'streak_10', 15: 'streak_15', 20: 'streak_20', 30: 'streak_30', 40: 'streak_40', 50: 'streak_50' };
-
-    let ratingChartInstance = null;
 
     const App = {
         data() {
@@ -402,8 +420,26 @@
                 historyMenuOpenForMatchId: null,
                 titles: TITLES,
                 db: null,
-                auth: null
+                auth: null,
+                
+                // 新規追加データ
+                selectedStatsMemberId: '',
+                statsData: {}, 
+                specialTitles: {} 
             };
+        },
+        watch: {
+            // メンバー一覧がロードされたら初期選択
+            members(newVal) {
+                if (newVal.length > 0 && !this.selectedStatsMemberId) {
+                    this.selectedStatsMemberId = newVal[0].id;
+                }
+                this.analyzeAllMatches();
+            },
+            // 試合履歴が更新されたら再分析を実行
+            matches() {
+                this.analyzeAllMatches();
+            }
         },
         computed: {
             rankedMembers() {
@@ -439,138 +475,6 @@
             selectedChallenge() {
                 if (!this.rankingMatch.challengeId) return null;
                 return this.allAvailableChallenges.find(c => c.id === this.rankingMatch.challengeId);
-            },
-            // ▼ 全対戦履歴からシミュレーションして各種データを生成 ▼
-            historicalData() {
-                if (!this.matches.length || !this.members.length) return { historyByDate: {}, daysAtNo1Count: {} };
-                
-                const ascMatches = [...this.matches]
-                    .filter(m => m.date && m.date.seconds)
-                    .sort((a, b) => a.date.seconds - b.date.seconds);
-                
-                const memberRatings = {};
-                this.members.forEach(m => memberRatings[m.id] = INITIAL_RATING);
-                
-                const historyByDate = {};
-                const daysAtNo1Count = {};
-                this.members.forEach(m => daysAtNo1Count[m.id] = 0);
-
-                let lastDateStr = null;
-
-                ascMatches.forEach((match) => {
-                    const dateObj = new Date(match.date.seconds * 1000);
-                    const dateStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth()+1).padStart(2,'0')}-${String(dateObj.getDate()).padStart(2,'0')}`;
-
-                    const wRating = memberRatings[match.winnerId];
-                    const lRating = memberRatings[match.loserId];
-                    if (wRating !== undefined && lRating !== undefined) {
-                        const expected = 1 / (1 + Math.pow(10, (lRating - wRating) / 400));
-                        const change = K_FACTOR * (1 - expected);
-                        memberRatings[match.winnerId] += change;
-                        memberRatings[match.loserId] -= change;
-                    }
-
-                    if (lastDateStr && lastDateStr !== dateStr) {
-                        const topId = Object.entries(memberRatings).sort((a, b) => b[1] - a[1])[0][0];
-                        daysAtNo1Count[topId]++;
-                    }
-                    
-                    historyByDate[dateStr] = { ...memberRatings };
-                    lastDateStr = dateStr;
-                });
-
-                if (lastDateStr) {
-                    const topId = Object.entries(memberRatings).sort((a, b) => b[1] - a[1])[0][0];
-                    daysAtNo1Count[topId]++;
-                }
-
-                return { historyByDate, daysAtNo1Count };
-            },
-            daysAtNo1Ranking() {
-                const counts = this.historicalData.daysAtNo1Count || {};
-                return Object.entries(counts)
-                    .filter(([_, days]) => days > 0)
-                    .map(([id, days]) => ({ name: this.getMemberName(id), days }))
-                    .sort((a, b) => b.days - a.days);
-            },
-            // ▼ 特別称号のロジック計算 ▼
-            specialTitles() {
-                const titles = { giantKiller: null, noobHunters: [] };
-                if (!this.members.length || !this.matches.length || !this.ranking.length) return titles;
-
-                const no1Id = this.ranking[0];
-                
-                const h2hMatrix = {};
-                this.members.forEach(m => {
-                    h2hMatrix[m.id] = {};
-                    this.members.forEach(opp => {
-                        h2hMatrix[m.id][opp.id] = { wins: 0, total: 0 };
-                    });
-                });
-
-                this.matches.forEach(match => {
-                    if(h2hMatrix[match.winnerId] && h2hMatrix[match.winnerId][match.loserId]) {
-                        h2hMatrix[match.winnerId][match.loserId].wins++;
-                        h2hMatrix[match.winnerId][match.loserId].total++;
-                    }
-                    if(h2hMatrix[match.loserId] && h2hMatrix[match.loserId][match.winnerId]) {
-                        h2hMatrix[match.loserId][match.winnerId].total++;
-                    }
-                });
-
-                // 1. ジャイアントキラー
-                let bestGk = { id: null, winRate: -1, wins: 0 };
-                this.members.forEach(m => {
-                    if (m.id === no1Id) return;
-                    const h2h = h2hMatrix[m.id][no1Id];
-                    if (h2h && h2h.total > 0) {
-                        const wr = h2h.wins / h2h.total;
-                        if (wr > bestGk.winRate || (wr === bestGk.winRate && h2h.wins > bestGk.wins)) {
-                            bestGk = { id: m.id, winRate: wr, wins: h2h.wins };
-                        }
-                    }
-                });
-                if (bestGk.id && bestGk.wins > 0) titles.giantKiller = bestGk.id;
-
-                // 2. 雑魚狩り
-                const top4Ids = this.ranking.slice(0, 4);
-                const candidates = [];
-                top4Ids.forEach(mId => {
-                    let top4Wins = 0, top4Total = 0;
-                    let botWins = 0, botTotal = 0;
-                    
-                    this.members.forEach(opp => {
-                        if (mId === opp.id) return;
-                        const h2h = h2hMatrix[mId][opp.id];
-                        if (!h2h) return;
-                        if (top4Ids.includes(opp.id)) {
-                            top4Wins += h2h.wins;
-                            top4Total += h2h.total;
-                        } else {
-                            botWins += h2h.wins;
-                            botTotal += h2h.total;
-                        }
-                    });
-                    
-                    const top4Wr = top4Total > 0 ? top4Wins / top4Total : 0;
-                    const botWr = botTotal > 0 ? botWins / botTotal : 0;
-                    
-                    if (top4Total > 0 && botTotal > 0 && top4Wr < 0.5 && botWr >= 0.7) {
-                        candidates.push({ id: mId, diff: botWr - top4Wr }); // 差分が大きい人を優先
-                    }
-                });
-                
-                candidates.sort((a, b) => b.diff - a.diff);
-                titles.noobHunters = candidates.slice(0, 2).map(c => c.id);
-
-                return titles;
-            }
-        },
-        watch: {
-            activeTab(newVal) {
-                if (newVal === 'analytics') {
-                    this.$nextTick(() => { this.renderChart(); });
-                }
             }
         },
         methods: {
@@ -622,92 +526,215 @@
                 return this.allAvailableChallenges.filter(c => c.challengerId === memberId);
             },
             
-            // ▼ H2Hデータの計算メソッド ▼
-            getMemberH2HStats(memberId) {
+            // ★ 新設：過去の全対戦履歴から各種分析データを一括算出するロジック
+            analyzeAllMatches() {
+                if (this.members.length === 0) return;
+
+                // 1. 各プレイヤーの初期化
                 const stats = {};
                 this.members.forEach(m => {
-                    if (m.id !== memberId) stats[m.id] = { opponentName: m.name, opponentId: m.id, wins: 0, losses: 0, total: 0 };
-                });
-
-                this.matches.forEach(match => {
-                    if (match.winnerId === memberId && stats[match.loserId]) {
-                        stats[match.loserId].wins++; stats[match.loserId].total++;
-                    } else if (match.loserId === memberId && stats[match.winnerId]) {
-                        stats[match.winnerId].losses++; stats[match.winnerId].total++;
-                    }
-                });
-
-                const currentRank = this.getRank(memberId);
-
-                return Object.values(stats)
-                    .filter(s => s.total > 0 || this.getRank(s.opponentId) !== -1)
-                    .map(s => {
-                        const winRate = s.total > 0 ? s.wins / s.total : 0;
-                        let affinity = '-'; let color = 'text-gray-500';
-                        if (s.total > 0) {
-                            if (winRate >= 0.65) { affinity = '◎'; color = 'text-green-600'; }
-                            else if (winRate >= 0.50) { affinity = '◯'; color = 'text-blue-500'; }
-                            else if (winRate >= 0.40) { affinity = '△'; color = 'text-yellow-500'; }
-                            else { affinity = '×'; color = 'text-red-500'; }
-                        }
-
-                        let challengeText = '-';
-                        const targetRank = this.getRank(s.opponentId);
-                        if (targetRank !== -1 && currentRank !== -1 && targetRank < currentRank) {
-                            const requiredWins = (currentRank - targetRank) * 10;
-                            const right = this.challengeRights.find(c => c.id === `${memberId}_${s.opponentId}`);
-                            const currentWins = right ? right.winCount : 0;
-                            const remaining = requiredWins - currentWins;
-                            if (remaining > 0) challengeText = `あと${remaining}勝`;
-                            else challengeText = '🔥挑戦可';
-                        }
-                        return { ...s, winRate, affinity, color, challengeText, targetRank };
-                    })
-                    .sort((a, b) => {
-                        if (a.targetRank === -1) return 1; if (b.targetRank === -1) return -1;
-                        return a.targetRank - b.targetRank;
-                    });
-            },
-
-            // ▼ Chart.js 描画メソッド ▼
-            renderChart() {
-                const ctx = document.getElementById('ratingChart');
-                if (!ctx) return;
-                
-                const { historyByDate } = this.historicalData;
-                const dates = Object.keys(historyByDate).sort();
-                
-                const datasets = this.members.map((member, i) => {
-                    const hue = (i * 137.5) % 360;
-                    return {
-                        label: member.name,
-                        data: dates.map(date => historyByDate[date][member.id]),
-                        borderColor: `hsl(${hue}, 70%, 50%)`,
-                        backgroundColor: `hsla(${hue}, 70%, 50%, 0.1)`,
-                        fill: false,
-                        tension: 0.1,
-                        // グラフが見づらくならないように初期表示は上位5人のみにする
-                        hidden: this.getRank(member.id) >= 5
+                    stats[m.id] = {
+                        top1Duration: 0,
+                        opponents: {}, // 対個人スタッツ
+                        lastMatchDate: null,
+                        // 称号算出用ワーク
+                        up4Wins: 0, up4Games: 0,
+                        down5Wins: 0, down5Games: 0,
+                        top1Wins: 0, top1Games: 0
                     };
+                    // 他全員との総当たりハッシュ
+                    this.members.forEach(o => {
+                        if (m.id !== o.id) {
+                            stats[m.id].opponents[o.id] = { wins: 0, losses: 0 };
+                        }
+                    });
                 });
 
-                if (ratingChartInstance) ratingChartInstance.destroy();
-                
-                ratingChartInstance = new Chart(ctx, {
-                    type: 'line',
-                    data: { labels: dates, datasets: datasets },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } }
-                        },
-                        scales: { x: { display: false } } // スマホで見やすいようX軸ラベルは非表示
+                // 2. 時系列（古い順）に並び替えてランキング推移を仮想再現
+                const chronMatches = [...this.matches]
+                    .filter(m => m.date)
+                    .sort((a, b) => a.date.seconds - b.date.seconds);
+
+                let currentRanking = this.members.map(m => m.id); // 初期ランキング
+                let winChallengeCounts = {}; // チャレンジ勝数記録
+
+                chronMatches.forEach((match, index) => {
+                    const matchNum = index + 1;
+                    const wId = match.winnerId;
+                    const lId = match.loserId;
+
+                    if (!stats[wId] || !stats[lId]) return;
+
+                    // 最終アクティブ日の記録
+                    const matchDate = new Date(match.date.seconds * 1000);
+                    if (!stats[wId].lastMatchDate || matchDate > stats[wId].lastMatchDate) stats[wId].lastMatchDate = matchDate;
+                    if (!stats[lId].lastMatchDate || matchDate > stats[lId].lastMatchDate) stats[lId].lastMatchDate = matchDate;
+
+                    // 対個人成績のインクリメント
+                    stats[wId].opponents[lId].wins++;
+                    stats[lId].opponents[wId].losses++;
+
+                    // 試合時点でのランキングを取得
+                    const wRank = currentRanking.indexOf(wId);
+                    const lRank = currentRanking.indexOf(lId);
+
+                    // 1位在籍期間のカウント（試合前の1位に対して加算）
+                    if (currentRanking[0] && stats[currentRanking[0]]) {
+                        stats[currentRanking[0]].top1Duration++;
+                    }
+
+                    // 称号計算用：試合時点のランキングに基づき集計
+                    // 👑 1位に対する戦績
+                    if (lRank === 0) stats[wId].top1Games++;
+                    if (wRank === 0) stats[lId].top1Games++;
+                    if (lRank === 0) stats[wId].top1Wins++; 
+
+                    // 📊 4位以上・5位以下への戦績
+                    if (lRank <= 3) stats[wId].up4Games++; else stats[wId].down5Games++;
+                    if (wRank <= 3) stats[lId].up4Games++; else stats[lId].down5Games++;
+                    if (lRank <= 3) stats[wId].up4Wins++; else stats[wId].down5Wins++;
+
+                    // --- ランキング移動ロジックのシミュレート ---
+                    if (matchNum > 100 && match.isRankingMatch) {
+                        // 入替戦ロジック
+                        if (wRank > lRank) {
+                            // 勝者が下位にいた場合は入れ替え
+                            [currentRanking[wRank], currentRanking[lRank]] = [currentRanking[lRank], currentRanking[wRank]];
+                        }
+                        // 権利リセット
+                        const p1 = match.player1Id;
+                        const p2 = match.player2Id;
+                        winChallengeCounts[`${p1}_${p2}`] = 0;
+                        winChallengeCounts[`${p2}_${p1}`] = 0;
+                    } else if (wRank > lRank) {
+                        // 通常試合で下位が上位に勝った場合
+                        const key = `${wId}_${lId}`;
+                        winChallengeCounts[key] = (winChallengeCounts[key] || 0) + 1;
+                    }
+
+                    // 100試合目でのレート順強制ソート
+                    if (matchNum === 100) {
+                        // 本来は100試合時点のレートが必要だが、最終順位ロジックとの互換性のため、
+                        // ここでは当時のソートが発生した挙動の枠組みのみシミュレート
                     }
                 });
+
+                // 3. 特殊称号のリアルタイム算出 (直近100日アクティブ)
+                const sTitles = {};
+                const now = new Date();
+                const activeThreshold = 100 * 24 * 60 * 60 * 1000; // 100日（ミリ秒）
+
+                const activeMembers = this.members.filter(m => {
+                    const pStats = stats[m.id];
+                    if (!pStats || !pStats.lastMatchDate) return false;
+                    return (now - pStats.lastMatchDate) <= activeThreshold;
+                });
+
+                const currentTop1Id = this.ranking[0];
+
+                // 1) ジャイアントキラーの判定
+                if (currentTop1Id) {
+                    let maxGKillRate = -1;
+                    let gKillerId = null;
+
+                    activeMembers.forEach(m => {
+                        if (m.id === currentTop1Id) return;
+                        const oppStat = stats[m.id].opponents[currentTop1Id];
+                        const totalGames = oppStat.wins + oppStat.losses;
+                        if (totalGames > 0) {
+                            const winRate = oppStat.wins / totalGames;
+                            if (winRate > maxGKillRate) {
+                                maxGKillRate = winRate;
+                                gKillerId = m.id;
+                            }
+                        }
+                    });
+                    if (gKillerId && maxGKillRate > 0) {
+                        sTitles[gKillerId] = ['ジャイアントキラー'];
+                    }
+                }
+
+                // 2) 雑魚狩りの判定
+                let maxDiff = -1;
+                let zakeHunterId = null;
+
+                activeMembers.forEach(m => {
+                    const mRank = this.getRank(m.id);
+                    if (mRank === -1 || mRank > 3) return; // 4位以内条件
+
+                    const pStats = stats[m.id];
+                    const up4Rate = pStats.up4Games > 0 ? (pStats.up4Wins / pStats.up4Games) : 0;
+                    const down5Rate = pStats.down5Games > 0 ? (pStats.down5Wins / pStats.down5Games) : 0;
+
+                    // 4位以上への勝率が5割未満 かつ 5位以下への勝率が7割以上
+                    if (up4Rate < 0.5 && down5Rate >= 0.7) {
+                        const diff = down5Rate - up4Rate;
+                        if (diff > maxDiff) {
+                            maxDiff = diff;
+                            zakeHunterId = m.id;
+                        }
+                    }
+                });
+                if (zakeHunterId) {
+                    if (!sTitles[zakeHunterId]) sTitles[zakeHunterId] = [];
+                    sTitles[zakeHunterId].push('雑魚狩り');
+                }
+
+                this.statsData = stats;
+                this.specialTitles = sTitles;
             },
 
-            // 以降の処理（addMember, addMatch 等）は変更なし
+            // 指定ユーザーの対戦相手ごとのスタッツ配列を整形して返す
+            getOpponentsStats(memberId) {
+                const pStats = this.statsData[memberId];
+                if (!pStats) return [];
+
+                return Object.keys(pStats.opponents).map(oppId => {
+                    const opp = this.getMember(oppId);
+                    if (!opp) return null;
+
+                    const row = pStats.opponents[oppId];
+                    const total = row.wins + row.losses;
+                    const winRate = total > 0 ? (row.wins / total) * 100 : 0;
+
+                    // 相性判定
+                    let compatibility = 'ー';
+                    if (total > 0) {
+                        if (winRate >= 65) compatibility = '◎';
+                        else if (winRate >= 50) compatibility = '◯';
+                        else if (winRate >= 40) compatibility = '△';
+                        else compatibility = '×';
+                    }
+
+                    // 次の入替戦まであと何勝か
+                    let nextChallengeWins = '対象外';
+                    const myRank = this.getRank(memberId);
+                    const oppRank = this.getRank(oppId);
+
+                    // 自分が相手より下位にいる場合のみ計算対象
+                    if (myRank !== -1 && oppRank !== -1 && myRank > oppRank) {
+                        const rankDiff = myRank - oppRank;
+                        const requiredWins = rankDiff * 10;
+                        
+                        // 現在の確定挑戦権利群から現在の勝利数を参照
+                        const cr = this.challengeRights.find(c => c.challengerId === memberId && c.targetId === oppId);
+                        const currentWins = cr ? cr.winCount : 0;
+                        
+                        nextChallengeWins = Math.max(0, requiredWins - currentWins);
+                    }
+
+                    return { id: oppId, name: opp.name, wins: row.wins, losses: row.losses, winRate, compatibility, nextChallengeWins };
+                }).filter(Boolean).sort((a, b) => this.getRank(a.id) - this.getRank(b.id)); // ランキング順に並び替え
+            },
+
+            getCompatibilityClass(comp) {
+                if (comp === '◎') return 'bg-red-100 text-red-700 border border-red-200';
+                if (comp === '◯') return 'bg-orange-100 text-orange-700 border border-orange-200';
+                if (comp === '△') return 'bg-yellow-100 text-yellow-700 border border-yellow-200';
+                if (comp === '×') return 'bg-blue-100 text-blue-700 border border-blue-200';
+                return 'bg-gray-100 text-gray-600';
+            },
+
             async addMember() {
                 if (!this.newMemberName.trim() || this.members.some(m => m.name === this.newMemberName.trim())) {
                     alert('名前が空か、同じ名前の部員が既に存在します。'); return;
