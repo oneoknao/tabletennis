@@ -494,6 +494,9 @@ const App = {
             const loserRating = loser.currentRating;
             const winnerExpected = 1 / (1 + Math.pow(10, (loserRating - winnerRating) / 400));
             const ratingChange = K_FACTOR * (1 - winnerExpected);
+            
+            const winnerUpdate = this.calculateMemberUpdate(winner, ratingChange, true, loserRating);
+            const loserUpdate = this.calculateMemberUpdate(loser, -ratingChange, false, winnerRating);
 
             const winnerUpdate = this.calculateMemberUpdate(winner, ratingChange, true);
             const loserUpdate = this.calculateMemberUpdate(loser, -ratingChange, false);
@@ -624,6 +627,9 @@ const App = {
                     const winnerRating = winner.currentRating;
                     const loserRating = loser.currentRating;
                     const ratingChange = K_FACTOR * (1 - (1 / (1 + Math.pow(10, (loserRating - winnerRating) / 400))));
+
+                    const winnerUpdate = this.calculateMemberUpdate(winner, ratingChange, true, loserRating);
+                    const loserUpdate = this.calculateMemberUpdate(loser, -ratingChange, false, winnerRating);
 
                     Object.assign(winner, this.calculateMemberUpdate(winner, ratingChange, true));
                     Object.assign(loser, this.calculateMemberUpdate(loser, -ratingChange, false));
