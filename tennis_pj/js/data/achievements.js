@@ -9,3 +9,9 @@ export const WIN_ACHIEVEMENTS_MAP = { 50: 'wins_50', 100: 'wins_100', 200: 'wins
 export const GAME_ACHIEVEMENTS_MAP = { 50: 'games_50', 100: 'games_100', 200: 'games_200', 300: 'games_300', 400: 'games_400', 500: 'games_500', 600: 'games_600', 700: 'games_700', 777: 'games_777', 800: 'games_800', 900: 'games_900', 1000: 'games_1000', 1500: 'games_1500', 2000: 'games_2000', 2500: 'games_2500', 3000: 'games_3000', 4000: 'games_4000', 5000: 'games_5000', 7777: 'games_7777', 10000: 'games_10000' };
 
 export const STREAK_ACHIEVEMENTS_MAP = { 5: 'streak_5', 6: 'streak_6', 7: 'streak_7', 8: 'streak_8', 9: 'streak_9', 10: 'streak_10', 15: 'streak_15', 20: 'streak_20', 30: 'streak_30', 40: 'streak_40', 50: 'streak_50' };
+
+export const ACHIEVEMENTS = {
+    // ...既存の実績...
+    'wins_10000': '通算10000勝', // ←この行の最後にカンマがあることを確認
+    'point_choo_choo': 'ポイントチューチュー' // ★追加
+};
