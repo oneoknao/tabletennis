@@ -394,4 +394,442 @@ const App = {
             });
             return result.sort((a, b) => b.total - a.total || b.rate - a.rate);
         },
-        selected
+        selectedMemberChallenges() {
+            if (!this.selectedMember || this.matches.length < 100) return [];
+            let sId = this.selectedMember.id;
+            let myRank = this.getRank(sId);
+            if (myRank === -1 || myRank === 0) return []; 
+            
+            let challenges = [];
+            for (let i = 0; i < myRank; i++) {
+                let targetId = this.ranking[i];
+                let targetRank = i;
+                let requiredWins = (myRank - targetRank) * 10;
+                
+                let rightId = `${sId}_${targetId}`;
+                let right = this.challengeRights.find(r => r.id === rightId);
+                let currentWins = right ? right.winCount : 0;
+                
+                let remaining = requiredWins - currentWins;
+                challenges.push({
+                    targetId: targetId,
+                    targetName: this.getMemberName(targetId),
+                    targetRank: targetRank + 1,
+                    requiredWins: requiredWins,
+                    currentWins: currentWins,
+                    remaining: remaining > 0 ? remaining : 0,
+                    canChallenge: remaining <= 0
+                });
+            }
+            return challenges;
+        }
+    },
+    methods: {
+        async initializeFirebase() {
+            try {
+                const app = initializeApp(firebaseConfig);
+                this.db = getFirestore(app);
+                this.auth = getAuth(app);
+                onAuthStateChanged(this.auth, user => {
+                    if (user) { this.setupFirestoreListeners(); } else { this.loading = false; }
+                });
+                await signInAnonymously(this.auth);
+            } catch (error) {
+                console.error("Firebase initialization failed:", error);
+                alert("Firebaseの設定が不十分なため、アプリを初期化できません。");
+                this.loading = false;
+            }
+        },
+        setupFirestoreListeners() {
+            const appId = firebaseConfig.appId;
+            const dbPath = `/artifacts/${appId}/public/data/`;
+            let initialLoads = 4;
+            const onInitialLoad = () => { if (--initialLoads === 0) this.loading = false; };
+            onSnapshot(collection(this.db, dbPath + 'members'), s => { this.members = s.docs.map(d => ({ id: d.id, ...d.data() })); onInitialLoad(); }, e => console.error("Members listener error:", e));
+            onSnapshot(query(collection(this.db, dbPath + 'matches'), orderBy('date', 'desc')), s => { this.matches = s.docs.map(d => ({ id: d.id, ...d.data() })); onInitialLoad(); }, e => console.error("Matches listener error:", e));
+            onSnapshot(doc(this.db, dbPath + 'ranking/current'), d => { this.ranking = d.exists() ? d.data().order || [] : []; onInitialLoad(); }, e => console.error("Ranking listener error:", e));
+            onSnapshot(collection(this.db, dbPath + 'challengeRights'), s => { this.challengeRights = s.docs.map(d => ({ id: d.id, ...d.data() })); onInitialLoad(); }, e => console.error("ChallengeRights listener error:", e));
+        },
+        getMember(memberId) { return this.members.find(m => m.id === memberId); },
+        getMemberName(memberId) { return this.getMember(memberId)?.name || '（元部員）'; },
+        getRank(memberId) { return this.ranking.indexOf(memberId); },
+        getTitleInfo(rating) {
+            if (rating === 1500) return this.titles.find(t => t.name === '初期値');
+            return this.titles.find(t => rating >= t.min && (!t.max || rating <= t.max)) || { name: '---', color: '#000' };
+        },
+        getAchievementText(achId) { return ACHIEVEMENTS[achId] || achId; },
+        getDisplayableChallenges(memberId) { return this.allAvailableChallenges.filter(c => c.challengerId === memberId); },
+        async addMember() {
+            if (!this.newMemberName.trim() || this.members.some(m => m.name === this.newMemberName.trim())) {
+                alert('名前が空か、同じ名前の部員が既に存在します。'); return;
+            }
+            const appId = firebaseConfig.appId;
+            const dbPath = `/artifacts/${appId}/public/data/`;
+            const newMember = { name: this.newMemberName.trim(), currentRating: INITIAL_RATING, maxRating: INITIAL_RATING, wins: 0, losses: 0, totalGames: 0, winStreak: 0, maxWinStreak: 0, achievements: [], createdAt: serverTimestamp() };
+            const docRef = await addDoc(collection(this.db, dbPath + 'members'), newMember);
+            const newRanking = [...this.ranking, docRef.id];
+            await setDoc(doc(this.db, dbPath + 'ranking/current'), { order: newRanking }, { merge: true });
+            this.newMemberName = '';
+            alert(`${newMember.name}さんを部員として追加しました。`);
+        },
+        async addMatch(isRankingMatch = false) {
+            const winnerId = isRankingMatch ? this.rankingMatch.winnerId : this.match.winnerId;
+            const loserId = isRankingMatch ? (this.selectedChallenge.challengerId === winnerId ? this.selectedChallenge.targetId : this.selectedChallenge.challengerId) : this.match.loserId;
+
+            if (!winnerId || !loserId) { alert("勝者と敗者を選択してください。"); return; }
+            const winner = this.getMember(winnerId);
+            const loser = this.getMember(loserId);
+            if (!winner || !loser) { alert("部員情報が見つかりません。"); return; }
+
+            const winnerRating = winner.currentRating;
+            const loserRating = loser.currentRating;
+            const winnerExpected = 1 / (1 + Math.pow(10, (loserRating - winnerRating) / 400));
+            const ratingChange = K_FACTOR * (1 - winnerExpected);
+            
+            const winnerUpdate = this.calculateMemberUpdate(winner, ratingChange, true, loserRating);
+            const loserUpdate = this.calculateMemberUpdate(loser, -ratingChange, false, winnerRating);
+
+            try {
+                const appId = firebaseConfig.appId;
+                const dbPath = `/artifacts/${appId}/public/data/`;
+                const batch = writeBatch(this.db);
+
+                batch.update(doc(this.db, dbPath + `members/${winnerId}`), winnerUpdate);
+                batch.update(doc(this.db, dbPath + `members/${loserId}`), loserUpdate);
+
+                const player1Id = isRankingMatch ? this.selectedChallenge.challengerId : winnerId;
+                const player2Id = isRankingMatch ? this.selectedChallenge.targetId : loserId;
+                batch.set(doc(collection(this.db, dbPath + 'matches')), { date: serverTimestamp(), player1Id, player2Id, winnerId, loserId, ratingChangeWinner: ratingChange, ratingChangeLoser: -ratingChange, isRankingMatch });
+
+                if (isRankingMatch) {
+                    if (winnerId === this.selectedChallenge.challengerId) {
+                        const newRanking = [...this.ranking];
+                        const [winIdx, loseIdx] = [this.getRank(winnerId), this.getRank(loserId)];
+                        [newRanking[winIdx], newRanking[loseIdx]] = [newRanking[loseIdx], newRanking[winIdx]];
+                        batch.update(doc(this.db, dbPath + 'ranking/current'), { order: newRanking });
+                    }
+                    const rightId1 = `${player1Id}_${player2Id}`;
+                    const rightId2 = `${player2Id}_${player1Id}`;
+                    batch.set(doc(this.db, dbPath, `challengeRights/${rightId1}`), { challengerId: player1Id, targetId: player2Id, winCount: 0 }, { merge: true });
+                    batch.set(doc(this.db, dbPath, `challengeRights/${rightId2}`), { challengerId: player2Id, targetId: player1Id, winCount: 0 }, { merge: true });
+                } else {
+                    const [winnerRank, loserRank] = [this.getRank(winnerId), this.getRank(loserId)];
+                    if (winnerRank > loserRank) { 
+                        const challengeDocId = `${winnerId}_${loserId}`;
+                        const challengeDocRef = doc(this.db, dbPath + `challengeRights/${challengeDocId}`);
+                        const challengeDoc = await getDoc(challengeDocRef);
+                        const currentWins = challengeDoc.exists() ? challengeDoc.data().winCount : 0;
+                        batch.set(challengeDocRef, { challengerId: winnerId, targetId: loserId, winCount: currentWins + 1 }, { merge: true });
+                    }
+                }
+
+                if (this.matches.length + 1 === 100) {
+                    alert('通算100試合達成！ランキングを現在のレート順に更新します。');
+                    const membersCopy = JSON.parse(JSON.stringify(this.members));
+                    membersCopy.find(m => m.id === winnerId).currentRating += ratingChange;
+                    membersCopy.find(m => m.id === loserId).currentRating -= ratingChange;
+                    const sortedMembers = membersCopy.sort((a, b) => b.currentRating - a.currentRating);
+                    batch.update(doc(this.db, dbPath + 'ranking/current'), { order: sortedMembers.map(m => m.id) });
+                }
+
+                await batch.commit();
+                alert("試合結果を登録しました。");
+                this.match = { winnerId: '', loserId: '' };
+                this.rankingMatch = { challengeId: '', winnerId: '' };
+
+                if (this.activeTab === 'ranking') {
+                    this.$nextTick(() => {
+                        if (this.rankingMode === 'rate') this.renderAllRateChart();
+                        if (this.rankingMode === 'rank') this.renderAllRankChart();
+                    });
+                }
+
+            } catch (error) { console.error("試合結果登録エラー:", error); alert("試合結果の登録に失敗しました。"); }
+        },
+        addRankingMatch() { this.addMatch(true); },
+        calculateMemberUpdate(member, ratingChange, isWinner, opponentRating) {
+            const newRating = member.currentRating + ratingChange;
+            const updated = { 
+                currentRating: newRating, 
+                totalGames: member.totalGames + 1, 
+                achievements: [...member.achievements],
+                winsVsHigher: member.winsVsHigher || 0,
+                gamesVsHigher: member.gamesVsHigher || 0,
+                winsVsLower: member.winsVsLower || 0,
+                gamesVsLower: member.gamesVsLower || 0
+            };
+
+            if (opponentRating > member.currentRating) {
+                updated.gamesVsHigher++;
+                if (isWinner) updated.winsVsHigher++;
+            } else if (opponentRating < member.currentRating) {
+                updated.gamesVsLower++;
+                if (isWinner) updated.winsVsLower++;
+            }
+
+            if (isWinner) {
+                Object.assign(updated, { maxRating: Math.max(member.maxRating || 1500, newRating), wins: member.wins + 1, winStreak: member.winStreak + 1, maxWinStreak: Math.max(member.maxWinStreak || 0, member.winStreak + 1) });
+            } else {
+                Object.assign(updated, { losses: member.losses + 1, winStreak: 0 });
+            }
+            this.checkAchievements(member, updated);
+            return updated;
+        },
+        checkAchievements(originalMember, updatedMember) {
+            const check = (map, value) => { if (map[value] && !originalMember.achievements.includes(map[value])) updatedMember.achievements.push(map[value]); };
+            check(WIN_ACHIEVEMENTS_MAP, updatedMember.wins);
+            check(GAME_ACHIEVEMENTS_MAP, updatedMember.totalGames);
+            check(STREAK_ACHIEVEMENTS_MAP, updatedMember.winStreak);
+
+            if (!originalMember.achievements.includes('point_choo_choo') && updatedMember.gamesVsHigher >= 5 && updatedMember.gamesVsLower >= 5) {
+                const rateVsHigher = updatedMember.winsVsHigher / updatedMember.gamesVsHigher;
+                const rateVsLower = updatedMember.winsVsLower / updatedMember.gamesVsLower;
+                
+                if (rateVsHigher < 0.4 && rateVsLower >= 0.8) {
+                    updatedMember.achievements.push('point_choo_choo');
+                }
+            }
+        },
+        showMemberDetails(member) { this.selectedMember = member; },
+        closeMemberDetails() { this.selectedMember = null; },
+        toggleHistoryMenu(matchId) { this.historyMenuOpenForMatchId = this.historyMenuOpenForMatchId === matchId ? null : matchId; },
+        confirmDeleteMatch(match) { this.matchToDelete = match; this.historyMenuOpenForMatchId = null; },
+        cancelDelete() { this.matchToDelete = null; },
+        openEditModal(match) { this.matchToEdit = { ...match }; this.historyMenuOpenForMatchId = null; },
+        cancelEdit() { this.matchToEdit = null; },
+        async deleteConfirmedMatch() {
+            if (!this.matchToDelete) return;
+            await this.runFullRecalculation({ deleteMatchId: this.matchToDelete.id });
+            this.matchToDelete = null;
+        },
+        async saveMatchEdit() {
+            if (!this.matchToEdit) return;
+            await this.runFullRecalculation({ editMatch: this.matchToEdit });
+            this.matchToEdit = null;
+        },
+        async runFullRecalculation({ deleteMatchId = null, editMatch = null } = {}) {
+            this.isRecalculating = true;
+            try {
+                const appId = firebaseConfig.appId;
+                const dbPath = `/artifacts/${appId}/public/data/`;
+
+                const membersQuery = query(collection(this.db, dbPath + 'members'), orderBy('createdAt'));
+                const matchesQuery = query(collection(this.db, dbPath + 'matches'), orderBy('date'));
+                const [membersSnapshot, matchesSnapshot] = await Promise.all([ getDocs(membersQuery), getDocs(matchesQuery) ]);
+                const allMembersForCalc = membersSnapshot.docs.map(d => ({id: d.id, ...d.data()}));
+                let processedMatches = matchesSnapshot.docs.map(d => ({id: d.id, ...d.data()}));
+
+                if (deleteMatchId) processedMatches = processedMatches.filter(m => m.id !== deleteMatchId);
+                if (editMatch) {
+                    const index = processedMatches.findIndex(m => m.id === editMatch.id);
+                    if (index !== -1) {
+                        processedMatches[index].winnerId = editMatch.winnerId;
+                        processedMatches[index].loserId = [editMatch.player1Id, editMatch.player2Id].find(id => id !== editMatch.winnerId);
+                    }
+                }
+
+                let tempMembers = JSON.parse(JSON.stringify(allMembersForCalc));
+                tempMembers.forEach(m => Object.assign(m, { currentRating: INITIAL_RATING, maxRating: INITIAL_RATING, wins: 0, losses: 0, totalGames: 0, winStreak: 0, maxWinStreak: 0, achievements: [], winsVsHigher: 0, gamesVsHigher: 0, winsVsLower: 0, gamesVsLower: 0 }));
+                let tempRanking = allMembersForCalc.map(m => m.id);
+                let tempChallengeRights = {};
+
+                processedMatches.forEach((match, index) => {
+                    const winner = tempMembers.find(m => m.id === match.winnerId);
+                    const loser = tempMembers.find(m => m.id === match.loserId);
+                    if (!winner || !loser) return;
+
+                    const winnerRating = winner.currentRating;
+                    const loserRating = loser.currentRating;
+                    const ratingChange = K_FACTOR * (1 - (1 / (1 + Math.pow(10, (loserRating - winnerRating) / 400))));
+
+                    Object.assign(winner, this.calculateMemberUpdate(winner, ratingChange, true, loserRating));
+                    Object.assign(loser, this.calculateMemberUpdate(loser, -ratingChange, false, winnerRating));
+
+                    match.ratingChangeWinner = ratingChange;
+                    match.ratingChangeLoser = -ratingChange;
+
+                    const winnerRank = tempRanking.indexOf(winner.id);
+                    const loserRank = tempRanking.indexOf(loser.id);
+
+                    if (index + 1 > 100 && match.isRankingMatch) {
+                        if (winnerRank > loserRank) {
+                            [tempRanking[winnerRank], tempRanking[loserRank]] = [tempRanking[loserRank], tempRanking[winnerRank]];
+                        }
+                        const rightId1 = `${winner.id}_${loser.id}`;
+                        const rightId2 = `${loser.id}_${winner.id}`;
+                        if (tempChallengeRights[rightId1]) tempChallengeRights[rightId1].winCount = 0;
+                        if (tempChallengeRights[rightId2]) tempChallengeRights[rightId2].winCount = 0;
+                    } else if (winnerRank > loserRank) {
+                        const rightId = `${winner.id}_${loser.id}`;
+                        if (!tempChallengeRights[rightId]) tempChallengeRights[rightId] = { challengerId: winner.id, targetId: loser.id, winCount: 0 };
+                        tempChallengeRights[rightId].winCount++;
+                    }
+
+                    if (index + 1 === 100) {
+                        tempRanking.sort((a, b) => tempMembers.find(m=>m.id===b).currentRating - tempMembers.find(m=>m.id===a).currentRating);
+                    }
+                });
+
+                const batch = writeBatch(this.db);
+                tempMembers.forEach(m => batch.update(doc(this.db, dbPath + `members/${m.id}`), m));
+                processedMatches.forEach(m => batch.update(doc(this.db, dbPath + `matches/${m.id}`), m));
+                if (deleteMatchId) batch.delete(doc(this.db, dbPath + `matches/${deleteMatchId}`));
+
+                const oldRights = await getDocs(collection(this.db, dbPath + 'challengeRights'));
+                oldRights.docs.forEach(d => batch.delete(d.ref));
+                Object.values(tempChallengeRights).forEach(r => batch.set(doc(this.db, dbPath + `challengeRights/${r.challengerId}_${r.targetId}`), r));
+                batch.set(doc(this.db, dbPath + 'ranking/current'), { order: tempRanking });
+
+                await batch.commit();
+                alert("データの再計算と更新が完了しました。");
+
+                if (this.activeTab === 'ranking') {
+                    this.$nextTick(() => {
+                        if (this.rankingMode === 'rate') this.renderAllRateChart();
+                        if (this.rankingMode === 'rank') this.renderAllRankChart();
+                    });
+                }
+            } catch (error) { console.error("Recalculation error:", error); alert("再計算中にエラーが発生しました。");
+            } finally { this.isRecalculating = false; }
+        },
+        setRankingMode(mode) {
+            this.rankingMode = mode;
+            this.$nextTick(() => {
+                if (mode === 'rate') this.renderAllRateChart();
+                if (mode === 'rank') this.renderAllRankChart();
+            });
+        },
+        renderAllRateChart() {
+            const canvas = document.getElementById('allRateChart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            if (this.allRateChartInstance) this.allRateChartInstance.destroy();
+
+            const data = this.allMembersTimeline;
+            this.allRateChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: { labels: data.labels, datasets: data.datasetsRate },
+                options: {
+                    responsive: true,
+                    interaction: { mode: 'nearest', axis: 'x', intersect: false },
+                    scales: {
+                        x: { title: { display: true, text: '試合数(通算)' }, ticks: { maxTicksLimit: 10 } },
+                        y: { title: { display: true, text: 'レート' }, suggestedMin: 1200, suggestedMax: 1800 }
+                    },
+                    plugins: {
+                        legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } },
+                        tooltip: { callbacks: { title: (ctx) => `通算 ${ctx[0].label} 試合終了時` } }
+                    }
+                }
+            });
+        },
+        renderAllRankChart() {
+            if (this.matches.length < 100) return;
+            const canvas = document.getElementById('allRankChart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            if (this.allRankChartInstance) this.allRankChartInstance.destroy();
+
+            const data = this.allMembersTimeline;
+            this.allRankChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: { labels: data.labels, datasets: data.datasetsRank },
+                options: {
+                    responsive: true,
+                    interaction: { mode: 'nearest', axis: 'x', intersect: false },
+                    scales: {
+                        x: { title: { display: true, text: '試合数(通算)' }, min: '100', ticks: { maxTicksLimit: 10 } },
+                        y: { 
+                            title: { display: true, text: '順位' }, 
+                            reverse: true, 
+                            min: 1,
+                            max: this.members.length > 0 ? this.members.length : 5,
+                            ticks: { stepSize: 1, precision: 0 }
+                        }
+                    },
+                    plugins: {
+                        legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } },
+                        tooltip: { callbacks: { title: (ctx) => `通算 ${ctx[0].label} 試合終了時` } }
+                    }
+                }
+            });
+        },
+        renderChart() {
+            if (!this.selectedMember || this.modalTab !== 'stats') return;
+            
+            const canvas = document.getElementById('ratingChart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            
+            if (this.chartInstance) {
+                this.chartInstance.destroy();
+            }
+            
+            let memberHistory = this.fullHistory[this.selectedMember.id];
+            if (!memberHistory) return;
+            
+            let labels = memberHistory.map(h => h.dateStr);
+            let ratings = memberHistory.map(h => h.rating);
+            let ranks = memberHistory.map(h => h.rank);
+            
+            this.chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'レート',
+                            data: ratings,
+                            borderColor: 'rgb(59, 130, 246)',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            yAxisID: 'yRating',
+                            tension: 0.2,
+                            fill: true,
+                            pointRadius: 2
+                        },
+                        {
+                            label: '順位',
+                            data: ranks,
+                            borderColor: 'rgb(239, 68, 68)',
+                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                            yAxisID: 'yRank',
+                            tension: 0,
+                            stepped: true,
+                            pointRadius: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    interaction: { mode: 'index', intersect: false },
+                    scales: {
+                        yRating: {
+                            type: 'linear',
+                            position: 'left',
+                            title: { display: true, text: 'レート' },
+                            suggestedMin: 1000,
+                            suggestedMax: 2000
+                        },
+                        yRank: {
+                            type: 'linear',
+                            position: 'right',
+                            title: { display: true, text: '順位' },
+                            reverse: true,
+                            grid: { drawOnChartArea: false },
+                            ticks: { stepSize: 1, precision: 0 }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { boxWidth: 12 }
+                        }
+                    }
+                }
+            });
+        }
+    },
+    mounted() { this.initializeFirebase(); }
+};
+
+Vue.createApp(App).mount('#app');
