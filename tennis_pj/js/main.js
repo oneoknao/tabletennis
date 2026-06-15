@@ -11,6 +11,8 @@ import {
 // ※もしGitHub上のファイル名が「title.js（sなし）」のままの場合は、以下の titles.js を title.js に書き換えてください。
 import { TITLES } from "./data/titles.js";
 
+import { ACHIEVEMENTS, WIN_ACHIEVEMENTS_MAP, GAME_ACHIEVEMENTS_MAP, STREAK_ACHIEVEMENTS_MAP } from "./data/achievements.js";
+
 const firebaseConfig = {
     apiKey: "AIzaSyDth9NwQk0X8MMrSZq9UYYtHUBLfjWf8h8",
     authDomain: "kringpingpong.firebaseapp.com",
@@ -24,15 +26,6 @@ const K_FACTOR = 32;
 const INITIAL_RATING = 1500;
 
 // ※ ここにあった const TITLES = [ ... ]; のリストは、別ファイルから読み込むため削除済みです！
-
-const ACHIEVEMENTS = {
-    'wins_50': '通算50勝', 'wins_100': '通算100勝', 'wins_200': '通算200勝', 'wins_300': '通算300勝', 'wins_400': '通算400勝', 'wins_500': '通算500勝', 'wins_600': '通算600勝', 'wins_700': '通算700勝', 'wins_777': '通算777勝', 'wins_800': '通算800勝', 'wins_900': '通算900勝', 'wins_1000': '通算1000勝', 'wins_1500': '通算1500勝', 'wins_2000': '通算2000勝', 'wins_2500': '通算2500勝', 'wins_3000': '通算3000勝', 'wins_4000': '通算4000勝', 'wins_5000': '通算5000勝', 'wins_7777': '通算7777勝', 'wins_10000': '通算10000勝',
-    'games_50': '通算50試合', 'games_100': '通算100試合', 'games_200': '通算200試合', 'games_300': '通算300試合', 'games_400': '通算400試合', 'games_500': '通算500試合', 'games_600': '通算600試合', 'games_700': '通算700試合', 'games_777': '通算777試合', 'games_800': '通算800試合', 'games_900': '通算900試合', 'games_1000': '通算1000試合', 'games_1500': '通算1500試合', 'games_2000': '通算2000試合', 'games_2500': '通算2500試合', 'games_3000': '通算3000試合', 'games_4000': '通算4000試合', 'games_5000': '通算5000試合', 'games_7777': '通算7777試合', 'games_10000': '通算10000試合',
-    'streak_5': '5連勝', 'streak_6': '6連勝', 'streak_7': '7連勝', 'streak_8': '8連勝', 'streak_9': '9連勝', 'streak_10': '10連勝', 'streak_15': '15連勝', 'streak_20': '20連勝', 'streak_30': '30連勝', 'streak_40': '40連勝', 'streak_50': '50連勝',
-};
-const WIN_ACHIEVEMENTS_MAP = { 50: 'wins_50', 100: 'wins_100', 200: 'wins_200', 300: 'wins_300', 400: 'wins_400', 500: 'wins_500', 600: 'wins_600', 700: 'wins_700', 777: 'wins_777', 800: 'wins_800', 900: 'wins_900', 1000: 'wins_1000', 1500: 'wins_1500', 2000: 'wins_2000', 2500: 'wins_2500', 3000: 'wins_3000', 4000: 'wins_4000', 5000: 'wins_5000', 7777: 'wins_7777', 10000: 'wins_10000' };
-const GAME_ACHIEVEMENTS_MAP = { 50: 'games_50', 100: 'games_100', 200: 'games_200', 300: 'games_300', 400: 'games_400', 500: 'games_500', 600: 'games_600', 700: 'games_700', 777: 'games_777', 800: 'games_800', 900: 'games_900', 1000: 'games_1000', 1500: 'games_1500', 2000: 'games_2000', 2500: 'games_2500', 3000: 'games_3000', 4000: 'games_4000', 5000: 'games_5000', 7777: 'games_7777', 10000: 'games_10000' };
-const STREAK_ACHIEVEMENTS_MAP = { 5: 'streak_5', 6: 'streak_6', 7: 'streak_7', 8: 'streak_8', 9: 'streak_9', 10: 'streak_10', 15: 'streak_15', 20: 'streak_20', 30: 'streak_30', 40: 'streak_40', 50: 'streak_50' };
 
 const App = {
     data() {
