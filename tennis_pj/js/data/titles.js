@@ -1,5 +1,6 @@
 // js/data/titles.js
-    const TITLES = [
+// js/data/titles.js
+    export const TITLES = [
         { name: '魔王', min: 2000, color: '#ff00ff', condition: 'レート2000以上' },
         { name: '卓神', min: 1800, color: '#ff4500', condition: 'レート1800-1999' },
         { name: '卓聖', min: 1750, color: '#ff8c00', condition: 'レート1750-1799' },
