@@ -631,6 +631,10 @@ const App = {
                     const winnerUpdate = this.calculateMemberUpdate(winner, ratingChange, true, loserRating);
                     const loserUpdate = this.calculateMemberUpdate(loser, -ratingChange, false, winnerRating);
 
+                    / ★ ここにも loserRating と winnerRating を追加
+                    Object.assign(winner, this.calculateMemberUpdate(winner, ratingChange, true, loserRating));
+                    Object.assign(loser, this.calculateMemberUpdate(loser, -ratingChange, false, winnerRating));
+
                     Object.assign(winner, this.calculateMemberUpdate(winner, ratingChange, true));
                     Object.assign(loser, this.calculateMemberUpdate(loser, -ratingChange, false));
                     match.ratingChangeWinner = ratingChange;
