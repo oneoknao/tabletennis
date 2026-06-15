@@ -569,12 +569,54 @@ const App = {
             this.checkAchievements(member, updated);
             return updated;
         },
-        addRankingMatch() { this.addMatch(true); },
+        addRankingMatch() {calculateMemberUpdate(member, ratingChange, isWinner, opponentRating) {
+            const newRating = member.currentRating + ratingChange;
+            const updated = { 
+                currentRating: newRating, 
+                totalGames: member.totalGames + 1, 
+                achievements: [...member.achievements],
+                // 新設した隠しパラメータを引き継ぎ
+                winsVsHigher: member.winsVsHigher || 0,
+                gamesVsHigher: member.gamesVsHigher || 0,
+                winsVsLower: member.winsVsLower || 0,
+                gamesVsLower: member.gamesVsLower || 0
+            };
+
+            // 格上か格下かを判定してカウントアップ
+            if (opponentRating > member.currentRating) {
+                updated.gamesVsHigher++;
+                if (isWinner) updated.winsVsHigher++;
+            } else if (opponentRating < member.currentRating) {
+                updated.gamesVsLower++;
+                if (isWinner) updated.winsVsLower++;
+            }
+
+            if (isWinner) {
+                Object.assign(updated, { maxRating: Math.max(member.maxRating || 1500, newRating), wins: member.wins + 1, winStreak: member.winStreak + 1, maxWinStreak: Math.max(member.maxWinStreak || 0, member.winStreak + 1) });
+            } else {
+                Object.assign(updated, { losses: member.losses + 1, winStreak: 0 });
+            }
+            this.checkAchievements(member, updated);
+            return updated;
+        },
+        
         checkAchievements(originalMember, updatedMember) {
             const check = (map, value) => { if (map[value] && !originalMember.achievements.includes(map[value])) updatedMember.achievements.push(map[value]); };
             check(WIN_ACHIEVEMENTS_MAP, updatedMember.wins);
             check(GAME_ACHIEVEMENTS_MAP, updatedMember.totalGames);
             check(STREAK_ACHIEVEMENTS_MAP, updatedMember.winStreak);
+
+            // ★ 新規追加：ポイントチューチューの判定
+            // ※1勝0敗(100%)などの極端なブレを排除するため、格上・格下それぞれと最低5試合以上戦っていることを発動条件に設定しています。
+            if (!originalMember.achievements.includes('point_choo_choo') && updatedMember.gamesVsHigher >= 5 && updatedMember.gamesVsLower >= 5) {
+                const rateVsHigher = updatedMember.winsVsHigher / updatedMember.gamesVsHigher;
+                const rateVsLower = updatedMember.winsVsLower / updatedMember.gamesVsLower;
+                
+                // 格上に4割未満 かつ 格下に8割以上
+                if (rateVsHigher < 0.4 && rateVsLower >= 0.8) {
+                    updatedMember.achievements.push('point_choo_choo');
+                }
+            }
         },
         showMemberDetails(member) { this.selectedMember = member; },
         closeMemberDetails() { this.selectedMember = null; },
