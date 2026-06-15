@@ -53,12 +53,7 @@ const App = {
             matchToDelete: null,
             matchToEdit: null,
             historyMenuOpenForMatchId: null,
-            titles: TITLES,
-            db: null,
-            auth: null,
-            chartInstance: null,
-            allRateChartInstance: null,
-            allRankChartInstance: null
+            titles: TITLES
         };
     },
     watch: {
