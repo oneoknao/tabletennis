@@ -8,14 +8,345 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
+    <link rel="icon" href="data:,">
     <link rel="stylesheet" href="./css/style.css">
 </head>
 <body class="bg-gray-100 text-gray-800">
 
     <div id="app" v-cloak class="max-w-lg mx-auto bg-white min-h-screen shadow-lg">
+
+        <div v-if="isRecalculating" class="fixed inset-0 bg-white bg-opacity-80 z-50 flex flex-col items-center justify-center">
+            <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-500"></div>
+            <p class="mt-4 text-lg font-semibold text-gray-700">全データを再計算中です...</p>
         </div>
 
-    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+        <header class="bg-blue-600 text-white p-4 text-center sticky top-0 z-10 shadow-md">
+            <h1 class="text-2xl font-bold">啓林館卓球部</h1>
+        </header>
+
+        <nav class="flex justify-around bg-gray-200 sticky top-[72px] z-10">
+            <button @click="activeTab = 'ranking'" :class="{'tab-active': activeTab === 'ranking'}" class="flex-1 py-3 px-2 font-semibold text-sm sm:text-base text-gray-700 hover:bg-blue-500 hover:text-white transition">ランキング</button>
+            <button @click="activeTab = 'match'" :class="{'tab-active': activeTab === 'match'}" class="flex-1 py-3 px-2 font-semibold text-sm sm:text-base text-gray-700 hover:bg-blue-500 hover:text-white transition">試合入力</button>
+            <button @click="activeTab = 'history'" :class="{'tab-active': activeTab === 'history'}" class="flex-1 py-3 px-2 font-semibold text-sm sm:text-base text-gray-700 hover:bg-blue-500 hover:text-white transition">対戦履歴</button>
+            <button @click="activeTab = 'info'" :class="{'tab-active': activeTab === 'info'}" class="flex-1 py-3 px-2 font-semibold text-sm sm:text-base text-gray-700 hover:bg-blue-500 hover:text-white transition">情報</button>
+        </nav>
+
+        <main class="p-4">
+            <div v-if="loading && !isRecalculating" class="text-center py-10">
+                <p>データを読み込んでいます...</p>
+            </div>
+
+            <section v-show="activeTab === 'ranking'" v-if="!loading">
+                
+                <div class="flex border-b-2 border-blue-500 mb-4 bg-white rounded-t-lg overflow-hidden shadow-sm sticky top-[120px] z-10">
+                    <button @click="rankingMode = 'list'" :class="{'bg-blue-500 text-white': rankingMode === 'list', 'text-gray-600': rankingMode !== 'list'}" class="flex-1 py-2 font-bold text-sm transition">一覧</button>
+                    <button @click="setRankingMode('rate')" :class="{'bg-blue-500 text-white': rankingMode === 'rate', 'text-gray-600': rankingMode !== 'rate'}" class="flex-1 py-2 font-bold text-sm transition border-l border-r border-gray-200">レート推移</button>
+                    <button @click="setRankingMode('rank')" :class="{'bg-blue-500 text-white': rankingMode === 'rank', 'text-gray-600': rankingMode !== 'rank'}" class="flex-1 py-2 font-bold text-sm transition">順位推移</button>
+                </div>
+
+                <div v-show="rankingMode === 'list'">
+                    <div v-if="rankedMembers.length === 0" class="text-center text-gray-500 py-4">部員を登録してください</div>
+                    <ul class="space-y-3">
+                        <li v-for="(member, index) in rankedMembers" :key="member.id" @click="showMemberDetails(member)" class="p-3 rounded-lg shadow-sm cursor-pointer transition"
+                            :class="(lastMonthTitles.mostWins.includes(member.id) || lastMonthTitles.bestRate.includes(member.id)) ? 'bg-gradient-to-r from-yellow-50 to-white border-2 border-yellow-400' : 'bg-white border border-gray-200 hover:bg-gray-50'">
+                            <div class="flex items-start space-x-4">
+                                <span class="text-lg font-bold text-gray-500 w-6 text-center pt-1">{{ index + 1 }}</span>
+                                <div class="flex-1">
+                                    <div class="font-semibold text-lg flex items-center flex-wrap gap-1">
+                                        {{ member.name }}
+                                        <span v-if="lastMonthTitles.mostWins.includes(member.id)" class="text-[10px] font-bold bg-yellow-400 text-white px-1.5 py-0.5 rounded shadow-sm flex items-center">
+                                            👑{{ lastMonthTitles.monthLabel }}最多勝
+                                        </span>
+                                        <span v-if="lastMonthTitles.bestRate.includes(member.id)" class="text-[10px] font-bold bg-amber-500 text-white px-1.5 py-0.5 rounded shadow-sm flex items-center">
+                                            👑{{ lastMonthTitles.monthLabel }}最高勝率
+                                        </span>
+                                    </div>
+                                    <p class="text-sm text-blue-600 font-medium mt-1">Rate: {{ Math.round(member.currentRating) }} (Max: {{ Math.round(member.maxRating) }})</p>
+                                    <p class="text-xs font-bold" :style="{color: getTitleInfo(member.currentRating).color}">{{ getTitleInfo(member.currentRating).name }}</p>
+                                </div>
+                                 <div class="text-right text-xs">
+                                    <div v-for="challenge in getDisplayableChallenges(member.id)" :key="challenge.targetId" class="font-bold text-red-500 animate-pulse mb-1">
+                                        <p>{{ challenge.targetName }}への挑戦権発生！</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+
+                <div v-show="rankingMode === 'rate'" class="bg-white p-2 rounded-lg shadow-sm border border-gray-200">
+                    <h3 class="text-center font-bold text-gray-700 mb-2">部員全員のレート推移</h3>
+                    <div v-if="matches.length === 0" class="text-center text-gray-500 py-4 text-sm">データがありません</div>
+                    <canvas id="allRateChart"></canvas>
+                </div>
+
+                <div v-show="rankingMode === 'rank'" class="bg-white p-2 rounded-lg shadow-sm border border-gray-200">
+                    <h3 class="text-center font-bold text-gray-700 mb-2">部員全員の順位推移</h3>
+                    <div v-if="matches.length < 100" class="text-center text-gray-500 py-4 text-sm">順位推移は通算100試合経過後から表示されます<br>（現在{{matches.length}}試合）</div>
+                    <canvas v-show="matches.length >= 100" id="allRankChart"></canvas>
+                </div>
+
+            </section>
+
+            <section v-show="activeTab === 'match'" v-if="!loading">
+                <div class="bg-white p-4 rounded-lg shadow mb-6">
+                    <h2 class="text-xl font-bold mb-4 border-b-2 border-green-500 pb-2">通常試合 結果入力</h2>
+                    <div v-if="members.length < 2" class="text-gray-500">部員が2名以上必要です</div>
+                    <form v-else @submit.prevent="addMatch(false)">
+                        <div class="grid grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label for="winner" class="block mb-1 font-semibold">勝者</label>
+                                <select id="winner" v-model="match.winnerId" class="w-full p-2 border rounded-md" required>
+                                    <option disabled value="">選択してください</option>
+                                    <option v-for="member in availableLosers" :value="member.id">{{ member.name }}</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="loser" class="block mb-1 font-semibold">敗者</label>
+                                <select id="loser" v-model="match.loserId" class="w-full p-2 border rounded-md" required>
+                                    <option disabled value="">選択してください</option>
+                                    <option v-for="member in availableWinners" :value="member.id">{{ member.name }}</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button type="submit" class="w-full bg-green-500 text-white py-2 rounded-lg font-bold hover:bg-green-600 transition">試合結果を登録</button>
+                    </form>
+                </div>
+                
+                 <div class="bg-white p-4 rounded-lg shadow">
+                    <h2 class="text-xl font-bold mb-4 border-b-2 border-red-500 pb-2">入替戦 結果入力</h2>
+                     <div v-if="matches.length < 100" class="text-gray-500">
+                        通算100試合が行われるまで入替戦はできません。(現在{{matches.length}}試合)
+                    </div>
+                    <div v-else-if="allAvailableChallenges.length === 0" class="text-gray-500">現在、挑戦可能な入替戦はありません</div>
+                    <form v-else @submit.prevent="addRankingMatch">
+                        <div class="mb-4">
+                            <label for="challenge" class="block mb-1 font-semibold">対戦カード</label>
+                            <select id="challenge" v-model="rankingMatch.challengeId" class="w-full p-2 border rounded-md" required>
+                                <option disabled value="">選択してください</option>
+                                <option v-for="challenge in allAvailableChallenges" :value="challenge.id">{{ challenge.challengerName }} vs {{ challenge.targetName }}</option>
+                            </select>
+                        </div>
+                        <div class="mb-4">
+                            <label class="block mb-1 font-semibold">勝者</label>
+                            <select v-model="rankingMatch.winnerId" class="w-full p-2 border rounded-md" required :disabled="!rankingMatch.challengeId">
+                                <option disabled value="">選択してください</option>
+                                <option v-if="selectedChallenge" :value="selectedChallenge.challengerId">{{ selectedChallenge.challengerName }}</option>
+                                <option v-if="selectedChallenge" :value="selectedChallenge.targetId">{{ selectedChallenge.targetName }}</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="w-full bg-red-500 text-white py-2 rounded-lg font-bold hover:bg-red-600 transition">入替戦結果を登録</button>
+                    </form>
+                </div>
+            </section>
+
+            <section v-show="activeTab === 'history'" v-if="!loading">
+                <h2 class="text-xl font-bold mb-4 border-b-2 border-yellow-500 pb-2">全対戦履歴</h2>
+                <div v-if="matches.length === 0" class="text-center text-gray-500 py-4">まだ対戦記録がありません</div>
+                <ul class="space-y-2">
+                    <li v-for="match in matches" :key="match.id" class="bg-white p-3 rounded-lg shadow-sm border border-gray-200" :class="{'bg-red-50 border-red-200': match.isRankingMatch}">
+                        <div class="flex justify-between items-center">
+                            <div class="flex-1">
+                                <span v-if="match.isRankingMatch" class="text-xs font-bold text-red-500 bg-red-100 px-2 py-1 rounded-full">入替戦</span>
+                                <p class="font-semibold">
+                                    <span class="text-green-600">👑 {{ getMemberName(match.winnerId) }}</span> vs {{ getMemberName(match.loserId) }}
+                                </p>
+                                <p class="text-xs text-gray-500">{{ match.date && match.date.seconds ? new Date(match.date.seconds * 1000).toLocaleString('ja-JP') : '日時不明' }}</p>
+                            </div>
+                            <div class="text-right text-xs mr-4">
+                                <p class="font-mono text-green-600">+{{ (match.ratingChangeWinner || 0).toFixed(1) }}</p>
+                                <p class="font-mono text-red-600">{{ (match.ratingChangeLoser || 0).toFixed(1) }}</p>
+                            </div>
+                            <div class="relative">
+                                <button @click="toggleHistoryMenu(match.id)" class="p-2 rounded-full hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-400">
+                                    <svg class="w-5 h-5 text-gray-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z" />
+                                    </svg>
+                                </button>
+                                <div v-if="historyMenuOpenForMatchId === match.id" @click.stop class="absolute right-0 mt-1 w-28 bg-white rounded-md shadow-xl z-20 border">
+                                    <a href="#" @click.prevent="openEditModal(match)" class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">修正する</a>
+                                    <a href="#" @click.prevent="confirmDeleteMatch(match)" class="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100">削除する</a>
+                                </div>
+                            </div>
+                        </div>
+                    </li>
+                </ul>
+            </section>
+
+            <section v-show="activeTab === 'info'" v-if="!loading">
+                <div class="bg-white p-4 rounded-lg shadow mb-6">
+                    <h2 class="text-xl font-bold mb-4 border-b-2 border-indigo-500 pb-2">新規部員追加</h2>
+                    <form @submit.prevent="addMember">
+                        <input v-model="newMemberName" type="text" placeholder="新しい部員の名前" class="w-full p-2 border rounded-md mb-2" required>
+                        <button type="submit" class="w-full bg-indigo-500 text-white py-2 rounded-lg font-bold hover:bg-indigo-600 transition">部員を追加</button>
+                    </form>
+                </div>
+
+                <div class="bg-white p-4 rounded-lg shadow mb-6">
+                    <h2 class="text-xl font-bold mb-4 border-b-2 border-purple-500 pb-2">称号一覧</h2>
+                    <ul class="space-y-1 text-sm">
+                        <li v-for="title in titles" class="flex justify-between p-1 rounded" :style="{backgroundColor: title.color+'20'}">
+                            <span class="font-bold" :style="{color: title.color}">{{ title.name }}</span>
+                            <span class="text-gray-600">{{ title.condition }}</span>
+                        </li>
+                    </ul>
+                </div>
+
+            </section>
+        </main>
+
+        <div v-if="selectedMember" @click.self="closeMemberDetails" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 modal z-20">
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
+                <div class="p-4 border-b bg-white rounded-t-lg">
+                    <div class="flex justify-between items-center mb-1">
+                        <h3 class="text-2xl font-bold">{{ selectedMember.name }}</h3>
+                        <button @click="closeMemberDetails" class="text-gray-500 hover:text-gray-800 focus:outline-none">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </button>
+                    </div>
+                    <p class="font-bold text-lg" :style="{color: getTitleInfo(selectedMember.currentRating).color}">
+                        順位: {{ getRank(selectedMember.id) + 1 }}位 | {{ getTitleInfo(selectedMember.currentRating).name }}
+                    </p>
+                </div>
+
+                <div class="flex border-b bg-gray-50">
+                    <button @click="modalTab = 'stats'" :class="{'bg-blue-500 text-white font-bold': modalTab==='stats', 'text-gray-600': modalTab!=='stats'}" class="flex-1 py-2 text-sm text-center transition">基本・実績</button>
+                    <button @click="modalTab = 'h2h'" :class="{'bg-blue-500 text-white font-bold': modalTab==='h2h', 'text-gray-600': modalTab!=='h2h'}" class="flex-1 py-2 text-sm text-center transition border-l border-r border-gray-200">対戦成績</button>
+                    <button @click="modalTab = 'challenge'" :class="{'bg-blue-500 text-white font-bold': modalTab==='challenge', 'text-gray-600': modalTab!=='challenge'}" class="flex-1 py-2 text-sm text-center transition">挑戦権</button>
+                </div>
+
+                <div class="p-4 overflow-y-auto flex-1">
+                    
+                    <div v-show="modalTab === 'stats'" class="space-y-4">
+                        <div>
+                            <div class="grid grid-cols-3 gap-2 text-center">
+                                <div class="bg-gray-100 p-2 rounded">
+                                    <p class="text-xs text-gray-500">現在レート</p>
+                                    <p class="text-lg font-bold text-blue-600">{{ Math.round(selectedMember.currentRating) }}</p>
+                                </div>
+                                <div class="bg-gray-100 p-2 rounded">
+                                    <p class="text-xs text-gray-500">最高レート</p>
+                                    <p class="text-lg font-bold text-purple-600">{{ Math.round(selectedMember.maxRating) }}</p>
+                                </div>
+                                <div class="bg-gray-100 p-2 rounded">
+                                    <p class="text-xs text-gray-500">勝率</p>
+                                    <p class="text-lg font-semibold">{{ selectedMember.totalGames > 0 ? ((selectedMember.wins / selectedMember.totalGames) * 100).toFixed(1) : '0.0' }}%</p>
+                                </div>
+                                <div class="bg-gray-100 p-2 rounded">
+                                    <p class="text-xs text-gray-500">勝敗</p>
+                                    <p class="text-sm font-semibold mt-1"><span class="text-green-600">{{ selectedMember.wins }}</span>勝 <span class="text-red-600">{{ selectedMember.losses }}</span>敗</p>
+                                </div>
+                                <div class="bg-gray-100 p-2 rounded">
+                                    <p class="text-xs text-gray-500">現在連勝</p>
+                                    <p class="text-sm font-semibold mt-1">{{ selectedMember.winStreak }}連勝</p>
+                                </div>
+                                <div class="bg-gray-100 p-2 rounded">
+                                    <p class="text-xs text-gray-500">最大連勝</p>
+                                    <p class="text-sm font-semibold mt-1">{{ selectedMember.maxWinStreak }}連勝</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h4 class="font-bold text-sm mb-2 text-gray-700">📈 個人のレート・順位 推移</h4>
+                            <div class="bg-white border rounded p-1">
+                                <canvas id="ratingChart" height="200"></canvas>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <h4 class="font-bold text-sm mb-2 text-gray-700">🏆 獲得実績</h4>
+                            <div class="flex flex-wrap gap-2">
+                                 <span v-for="achId in selectedMember.achievements" :key="'base-'+achId" class="bg-yellow-100 text-yellow-800 border border-yellow-200 text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
+                                    {{ getAchievementText(achId) }}
+                                </span>
+                                <span v-for="(achText, idx) in selectedMemberMonthlyAchievements" :key="'month-'+idx" class="bg-blue-100 text-blue-800 border border-blue-200 text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm">
+                                    {{ achText }}
+                                </span>
+                                <p v-if="selectedMember.achievements.length === 0 && selectedMemberMonthlyAchievements.length === 0" class="text-gray-500 text-sm">実績はまだありません</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-show="modalTab === 'h2h'" class="space-y-2">
+                        <h4 class="font-bold text-sm text-gray-700 mb-2">⚔️ 他の部員との対戦成績</h4>
+                        <div v-if="selectedMemberH2H.length === 0" class="text-gray-500 text-sm text-center py-4">まだ対戦データがありません</div>
+                        <ul v-else class="space-y-2">
+                             <li v-for="h in selectedMemberH2H" :key="h.opponentId" class="bg-white border p-2 rounded-md shadow-sm">
+                                 <div class="flex justify-between items-center mb-1">
+                                     <span class="font-semibold text-gray-800">{{ h.opponentName }}</span>
+                                     <span class="text-xs font-bold px-2 py-1 rounded" :class="h.rate >= 50 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'">勝率 {{ h.rate }}%</span>
+                                 </div>
+                                 <div class="flex justify-between text-sm">
+                                     <span class="text-gray-500">全 {{ h.total }} 試合</span>
+                                     <span><span class="text-green-600 font-bold">{{ h.wins }}勝</span> - <span class="text-red-600 font-bold">{{ h.losses }}敗</span></span>
+                                 </div>
+                             </li>
+                        </ul>
+                    </div>
+
+                    <div v-show="modalTab === 'challenge'" class="space-y-2">
+                         <h4 class="font-bold text-sm text-gray-700 mb-2">🔥 上位陣への入れ替え戦 挑戦権状況</h4>
+                         <div v-if="matches.length < 100" class="text-sm text-gray-500 bg-gray-50 p-3 rounded">
+                             通算100試合が行われるまで入れ替え戦システムは解放されません。(現在{{matches.length}}試合)
+                         </div>
+                         <div v-else-if="selectedMemberChallenges.length === 0" class="text-sm text-gray-500 bg-gray-50 p-3 rounded">
+                             現在、挑戦対象となる上位の部員がいません。（あなたが1位です）
+                         </div>
+                         <ul v-else class="space-y-3">
+                             <li v-for="c in selectedMemberChallenges" :key="c.targetId" class="bg-white border p-3 rounded-md shadow-sm relative overflow-hidden">
+                                 <div class="flex justify-between items-center mb-2 relative z-10">
+                                     <span class="font-bold text-gray-800"><span class="text-gray-500 text-sm font-normal">{{ c.targetRank }}位</span> {{ c.targetName }}</span>
+                                     <span v-if="c.canChallenge" class="text-xs font-bold bg-red-500 text-white px-2 py-1 rounded shadow animate-pulse">挑戦可能！</span>
+                                     <span v-else class="text-xs font-bold bg-gray-200 text-gray-700 px-2 py-1 rounded">あと {{ c.remaining }} 勝</span>
+                                 </div>
+                                 <div class="w-full bg-gray-200 rounded-full h-3 relative z-10">
+                                     <div class="bg-blue-500 h-3 rounded-full transition-all duration-500" :style="{ width: Math.min((c.currentWins / c.requiredWins) * 100, 100) + '%' }"></div>
+                                 </div>
+                                 <div class="text-right text-xs text-gray-500 mt-1 relative z-10 font-mono">
+                                     {{ c.currentWins }} / {{ c.requiredWins }} Wins
+                                 </div>
+                                 <div v-if="c.canChallenge" class="absolute inset-0 bg-red-50 opacity-50 z-0"></div>
+                             </li>
+                         </ul>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <div v-if="matchToEdit" @click.self="cancelEdit" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 modal z-30">
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-sm">
+                <h3 class="text-lg font-bold p-4 border-b">試合結果を修正</h3>
+                <div class="p-4">
+                    <p class="font-semibold mb-2">{{ getMemberName(matchToEdit.player1Id) }} vs {{ getMemberName(matchToEdit.player2Id) }}</p>
+                    <label class="block mb-1 font-semibold">勝者</label>
+                    <select v-model="matchToEdit.winnerId" class="w-full p-2 border rounded-md">
+                        <option :value="matchToEdit.player1Id">{{ getMemberName(matchToEdit.player1Id) }}</option>
+                        <option :value="matchToEdit.player2Id">{{ getMemberName(matchToEdit.player2Id) }}</option>
+                    </select>
+                </div>
+                <div class="p-4 bg-gray-50 flex justify-end space-x-2">
+                    <button @click="cancelEdit" class="px-4 py-2 bg-gray-200 rounded font-semibold hover:bg-gray-300">キャンセル</button>
+                    <button @click="saveMatchEdit" class="px-4 py-2 bg-blue-500 text-white rounded font-semibold hover:bg-blue-600">保存</button>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="matchToDelete" @click.self="cancelDelete" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 modal z-30">
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-sm">
+                <h3 class="text-lg font-bold p-4 border-b">削除の確認</h3>
+                <p class="p-4">この試合結果を本当に削除しますか？<br>関連する全データが再計算されます。</p>
+                <div class="p-4 bg-gray-50 flex justify-end space-x-2">
+                    <button @click="cancelDelete" class="px-4 py-2 bg-gray-200 rounded font-semibold hover:bg-gray-300">いいえ</button>
+                    <button @click="deleteConfirmedMatch" class="px-4 py-2 bg-red-500 text-white rounded font-semibold hover:bg-red-600">はい、削除します</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
     
     <script type="module" src="./js/main.js"></script>
 </body>
