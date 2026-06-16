@@ -479,7 +479,7 @@ const App = {
                 alert('名前が空か、同じ名前の部員が既に存在します。'); return;
             }
             const appId = firebaseConfig.appId;
-            const dbPath = `/artifacts/${appId}/public/data/`;
+            const dbPath = '/artifacts/1:761163319181:web:c1cd25f30851ce07b49fc4/public/data/';
             const newMember = { name: this.newMemberName.trim(), currentRating: INITIAL_RATING, maxRating: INITIAL_RATING, wins: 0, losses: 0, totalGames: 0, winStreak: 0, maxWinStreak: 0, achievements: [], createdAt: serverTimestamp() };
             const docRef = await addDoc(collection(this.db, dbPath + 'members'), newMember);
             const newRanking = [...this.ranking, docRef.id];
@@ -506,7 +506,7 @@ const App = {
 
             try {
                 const appId = firebaseConfig.appId;
-                const dbPath = `/artifacts/${appId}/public/data/`;
+                const dbPath = '/artifacts/1:761163319181:web:c1cd25f30851ce07b49fc4/public/data/';
                 const batch = writeBatch(this.db);
 
                 batch.update(doc(this.db, dbPath + `members/${winnerId}`), winnerUpdate);
@@ -600,7 +600,7 @@ const App = {
             this.isRecalculating = true;
             try {
                 const appId = firebaseConfig.appId;
-                const dbPath = `/artifacts/${appId}/public/data/`;
+                const dbPath = '/artifacts/1:761163319181:web:c1cd25f30851ce07b49fc4/public/data/';
 
                 const membersQuery = query(collection(this.db, dbPath + 'members'), orderBy('createdAt'));
                 const matchesQuery = query(collection(this.db, dbPath + 'matches'), orderBy('date'));
