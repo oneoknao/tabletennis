@@ -456,7 +456,6 @@ const App = {
             }
         },
         setupFirestoreListeners() {
-            const appId = firebaseConfig.appId;
             const dbPath = `/artifacts/1:761163319181:web:c1cd25f30851ce07b49fc4/public/data/`;
             let initialLoads = 4;
             const onInitialLoad = () => { if (--initialLoads === 0) this.loading = false; };
@@ -478,7 +477,6 @@ const App = {
             if (!this.newMemberName.trim() || this.members.some(m => m.name === this.newMemberName.trim())) {
                 alert('名前が空か、同じ名前の部員が既に存在します。'); return;
             }
-            const appId = firebaseConfig.appId;
             const dbPath = '/artifacts/1:761163319181:web:c1cd25f30851ce07b49fc4/public/data/';
             const newMember = { name: this.newMemberName.trim(), currentRating: INITIAL_RATING, maxRating: INITIAL_RATING, wins: 0, losses: 0, totalGames: 0, winStreak: 0, maxWinStreak: 0, achievements: [], createdAt: serverTimestamp() };
             const docRef = await addDoc(collection(this.db, dbPath + 'members'), newMember);
@@ -505,7 +503,6 @@ const App = {
             const loserUpdate = this.calculateMemberUpdate(loser, -ratingChange, false);
 
             try {
-                const appId = firebaseConfig.appId;
                 const dbPath = '/artifacts/1:761163319181:web:c1cd25f30851ce07b49fc4/public/data/';
                 const batch = writeBatch(this.db);
 
@@ -599,7 +596,6 @@ const App = {
         async runFullRecalculation({ deleteMatchId = null, editMatch = null } = {}) {
             this.isRecalculating = true;
             try {
-                const appId = firebaseConfig.appId;
                 const dbPath = '/artifacts/1:761163319181:web:c1cd25f30851ce07b49fc4/public/data/';
 
                 const membersQuery = query(collection(this.db, dbPath + 'members'), orderBy('createdAt'));
