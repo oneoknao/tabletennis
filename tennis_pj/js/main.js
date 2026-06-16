@@ -457,7 +457,7 @@ const App = {
         },
         setupFirestoreListeners() {
             const appId = firebaseConfig.appId;
-            const dbPath = `/artifacts/${appId}/public/data/`;
+            const dbPath = `/artifacts/1:761163319181:web:c1cd25f30851ce07b49fc4/public/data/`;
             let initialLoads = 4;
             const onInitialLoad = () => { if (--initialLoads === 0) this.loading = false; };
             onSnapshot(collection(this.db, dbPath + 'members'), s => { this.members = s.docs.map(d => ({ id: d.id, ...d.data() })); onInitialLoad(); }, e => console.error("Members listener error:", e));
