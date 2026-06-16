@@ -12,12 +12,13 @@ import {
 import { TITLES } from "./data/titles.js";
 
 const firebaseConfig = {
-    apiKey: "AIzaSyDth9NwQk0X8MMrSZq9UYYtHUBLfjWf8h8",
-    authDomain: "kringpingpong.firebaseapp.com",
-    projectId: "kringpingpong",
-    storageBucket: "kringpingpong.firebasestorage.app",
-    messagingSenderId: "761163319181",
-    appId: "1:761163319181:web:c1cd25f30851ce07b49fc4"
+  apiKey: "AIzaSyB-UKi0ZjOqu8RwYrP-YpxqSYQhZKKbaXU",
+  authDomain: "tabletennis-e2f4f.firebaseapp.com",
+  projectId: "tabletennis-e2f4f",
+  storageBucket: "tabletennis-e2f4f.firebasestorage.app",
+  messagingSenderId: "920016325682",
+  appId: "1:920016325682:web:8a76492a35a71bad36402b",
+  measurementId: "G-GZ2693V6GT"
 };
 
 const K_FACTOR = 32;
